@@ -1,0 +1,6 @@
+from .doc_to_image_adapter import DocToImageAdapter
+from .docx_to_image_adapter import DocxToImageAdapter
+from .pdf_to_image_adapter import PdfToImageAdapter
+from .ppt_to_image_adapter import PptToImageAdapter
+from .pptx_to_image_adapter import PptxToImageAdapter
+from .image_to_text_adapter import ImageToTextAdapter

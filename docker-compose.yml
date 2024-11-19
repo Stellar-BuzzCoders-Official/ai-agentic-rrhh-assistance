@@ -1,0 +1,30 @@
+services:
+  qaassistance:
+    build: .
+    ports:
+      - "5000:5000"
+    networks:
+      - qava_net
+    volumes:
+      - ./app.py:/app/app.py
+      - ./src:/app/src
+    environment:
+      - CHROMA_SERVER_HOST=chromadb
+      - CHROMA_SERVER_HTTP_PORT
+      - FLASK_DEBUG=1
+      - FLASK_APP=app.py
+      - OLLAMA_BASE_URL
+      - OLLAMA_PORT
+      - OLLAMA_HOST
+      - SCREENSHOT_API_HOST
+      - SCREENSHOT_API_PORT
+      
+      - API_TEXT_STORAGE_URL
+      - API_TEXT_STORAGE_PORT
+      - API_TEXT_STORAGE_HOST
+    expose:
+      - 5000
+    
+networks:
+  qava_net:
+    external: true
