@@ -13,8 +13,8 @@ class MongoDBRepository(MongoDBPort):
     def __init__(self):
         mongo_user = os.getenv('MONGO_INITDB_ROOT_USERNAME', 'root')
         mongo_password = os.getenv('MONGO_INITDB_ROOT_PASSWORD', 'rootpassword')
-        mongo_host = os.getenv('MONGO_SERVER_HOST', 'mongodb')
-        mongo_port = os.getenv('MONGO_SERVER_PORT', '27017')
+        mongo_host = os.getenv('MONGO_SERVER_HOST', 'localhost')
+        mongo_port = os.getenv('MONGO_SERVER_PORT', '28018')
         self.logger = logging.getLogger(__name__)
         self.loggin = logging.getLogger(__name__)
         self.loggin.info("Conectando a MongoDB...")
@@ -96,7 +96,7 @@ class MongoDBRepository(MongoDBPort):
             return self.collection_conversation.delete_one({"_id": conversation_id})
         except Exception as e:
             raise PyMongoError(f"Error al eliminar el conversacion con _id {conversation_id}: {str(e)}")
-
+    
     def delete_history_conversation(self, user_id: str):
         """
         Elimina todos los documentos de la colección 'conversations' para un usuario específico.

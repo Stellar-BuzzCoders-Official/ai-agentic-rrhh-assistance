@@ -1,15 +1,16 @@
 services:
-  qaassistance:
+  joyit-cn-ai-chatbot-screening:
+    container_name: joyit-cn-ai-chatbot-screening
     build: .
     ports:
       - "5000:5000"
     networks:
-      - qava_net
+      - joyit_screening_net
     volumes:
       - ./app.py:/app/app.py
       - ./src:/app/src
     environment:
-      - CHROMA_SERVER_HOST=chromadb
+      - CHROMA_SERVER_HOST
       - CHROMA_SERVER_HTTP_PORT
       - FLASK_DEBUG=1
       - FLASK_APP=app.py
@@ -18,13 +19,16 @@ services:
       - OLLAMA_HOST
       - SCREENSHOT_API_HOST
       - SCREENSHOT_API_PORT
-      
       - API_TEXT_STORAGE_URL
       - API_TEXT_STORAGE_PORT
       - API_TEXT_STORAGE_HOST
+      - MONGO_INITDB_ROOT_USERNAME
+      - MONGO_INITDB_ROOT_PASSWORD
+      - MONGO_SERVER_port
+      - MONGO_SERVER_HOST
     expose:
       - 5000
     
 networks:
-  qava_net:
+  joyit_screening_net:
     external: true

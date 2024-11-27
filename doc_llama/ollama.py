@@ -35,7 +35,7 @@ class OllamaEmbeddings(BaseModel, Embeddings):
     
     """
     
-    base_url: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    base_url: str = os.getenv("OLLAMA_BASE_URL", "http://joyit_ollama:11434")
     
     """Base url the model is hosted under."""
     model: str = "llama2"
