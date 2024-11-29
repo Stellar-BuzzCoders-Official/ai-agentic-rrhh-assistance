@@ -6,16 +6,13 @@ from src.services import TestCaseGeneratorService
 from src.adapters.output_adapters import ChromaRepository
 from src.adapters.output_adapters import OllamaRepository
 from src.adapters.output_adapters import MongoDBRepository
-from src.adapters.test_cases_adapters import ProcessContextAdapter
-from src.adapters.test_cases_adapters.process_context_api_adapter import ProcessContextApiAdapter
-from src.adapters.test_cases_adapters import ProcessUserStoryAdapter
-from src.adapters.test_cases_adapters.test_case_prompt_generator_adapter import TestCasePromptGeneratorAdapter
+from src.adapters.tech_profile_adapters import ProcessRequestRequirementsAdapter
+from src.adapters.tech_profile_adapters import ProcessUserStoryAdapter
+from src.adapters.tech_profile_adapters.test_case_prompt_generator_adapter import TestCasePromptGeneratorAdapter
 from src.adapters.conversation_adapters.name_history_generator_adapter import NameHistoryGeneratorAdapter
 from src.adapters.conversation_adapters.conversation_management_adapter import ConversationManagementAdapter
-from src.adapters.test_cases_adapters.process_user_story_api_adapter import ProcessUserStoryApiAdapter
-from src.adapters.test_cases_adapters.test_case_prompt_generator_api_adapter import TestCasePromptGeneratorApiAdapter
 import logging
-from src.adapters.test_cases_adapters.count_tokens_adapter import CountTokensAdapter
+from src.adapters.tech_profile_adapters.count_tokens_adapter import CountTokensAdapter
 from pymongo.errors import PyMongoError
 
 app = Flask(__name__)
@@ -29,12 +26,9 @@ count_tokens = CountTokensAdapter()
 conversation_manager = ConversationManagementAdapter(mongo_repo)
 name_history_generator = NameHistoryGeneratorAdapter(llm)
 prompt_generator = TestCasePromptGeneratorAdapter(llm)
-prompt_generator_api = TestCasePromptGeneratorApiAdapter(llm)
-process_context = ProcessContextAdapter(llm, mongo_repo, name_history_generator, conversation_manager, count_tokens)
-process_context_api = ProcessContextApiAdapter(llm, mongo_repo, name_history_generator, conversation_manager, count_tokens)
+process_request_requirements = ProcessRequestRequirementsAdapter(llm, mongo_repo, name_history_generator, conversation_manager, count_tokens)
 process_user_story = ProcessUserStoryAdapter(llm, mongo_repo, prompt_generator, conversation_manager, count_tokens)
-process_user_story_api = ProcessUserStoryApiAdapter(llm, mongo_repo, prompt_generator_api, conversation_manager, count_tokens)
-test_case_generator_service = TestCaseGeneratorService(process_context, process_user_story, process_context_api, process_user_story_api)
+test_case_generator_service = TestCaseGeneratorService(process_request_requirements, process_user_story,)
 api_controller = APIController(test_case_generator_service)
 
 @app.route('/')

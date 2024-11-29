@@ -1,3 +1,3 @@
-from .process_context_adapter import ProcessContextAdapter
+from .process_request_requirements_adapter import ProcessRequestRequirementsAdapter
 from .process_user_story_adapter import ProcessUserStoryAdapter
 from .test_case_prompt_generator_adapter import TestCasePromptGeneratorAdapter

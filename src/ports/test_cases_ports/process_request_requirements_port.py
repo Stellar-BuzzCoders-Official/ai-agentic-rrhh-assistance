@@ -1,9 +1,9 @@
 # src/ports/test_cases_ports/process_context_port.py
 from abc import ABC, abstractmethod
 
-class ProcessContextPort(ABC):
+class ProcessRequestRequirementsPort(ABC):
     @abstractmethod
-    def _process_context(
+    def _process_request_requirements(
         self,
         input_data: dict,
         conversation_id: str,
@@ -15,11 +15,11 @@ class ProcessContextPort(ABC):
         pass
 
     @abstractmethod
-    def validate_context(self, context: str) -> bool:
+    def validate_request_requirements(self, context: str) -> bool:
         """Valida el contexto proporcionado por el usuario."""
         pass
 
     @abstractmethod
-    def prompt_validation_context(self, context: str) -> str:
+    def prompt_validation_request_requirements(self, context: str) -> str:
         """Genera un prompt para validar el contexto."""
         pass
