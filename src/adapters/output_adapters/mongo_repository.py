@@ -28,7 +28,7 @@ class MongoDBRepository(MongoDBPort):
         self.logger.info("collection conversations creado")
         self.collection_user = self.db['users']
         self.logger.info("collection users creado")
-        self.collection_file = self.db['files']
+        self.collection_file = self.db['capabilities']
         self.logger.info("collection files creado")
         logger.info("Conexión a MongoDB establecida.")
 

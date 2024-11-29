@@ -8,6 +8,8 @@ from src.ports.conversation_ports.name_history_generator_port import NameHistory
 from src.ports.conversation_ports.conversation_management_port import ConversationManagementPort
 from src.ports.output_ports.llm_port import LLMPort
 from src.ports.test_cases_ports.count_tokens_port import CountTokensPort
+import requests
+import os
 
 class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
     def __init__(self, llm: LLMPort, mongo_repo: MongoDBPort, name_history_generator: 
@@ -19,6 +21,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.conversation_manager = conversation_manager
         self.conversation_history = {}
         self.logger = logging.getLogger(__name__)
+        self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://localhost:7000/process-file')
         self.logger.info("ProcessUserStorydapter initialized")
 
     def _process_request_requirements(self, input_data, conversation_id, user_message, previous_messages):
@@ -58,42 +61,88 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             self.logger.error(f"Error al verificar el userID en la base de datos: {str(e)}")
             return {"error": "Error al verificar el userID en la base de datos."}, 500
 
-        # Validar el request_requirementso del usuario
-        is_valid_request_requirements = self.validate_request_requirements(user_message)
-        self.logger.debug(f"Validez del request_requirementso: {is_valid_request_requirements}")
+        # Procesar el último mensaje
+        processed_content = None
+        message = messages[-1] if messages else None
 
-        # Si el request_requirementso es válido y no hay un nombre de historia, generarlo
+        if message and message.get('role') == 'user':
+            content = message.get('content')
+
+            # Verificar si content es un objeto con file_type (indicando que es un archivo)
+            if isinstance(content, dict) and 'file_type' in content:
+                try:
+                    self.logger.debug(f"Procesando archivo con el microservicio: {content}")
+                    response = requests.post(self.api_extractor_text_url, json=content)
+                    response.raise_for_status()
+                    processed_data = response.json()
+
+                    # Reemplazar completamente el content con la respuesta del microservicio
+                    if processed_data and isinstance(processed_data, dict):
+                        message['content'] = processed_data
+                        processed_content = processed_data.get('source', {}).get('data', "")
+                        self.logger.debug(f"Archivo procesado y actualizado: {message['content']}")
+                    else:
+                        self.logger.error("La respuesta del microservicio no tiene el formato esperado")
+                        return {"error": "La respuesta del microservicio no tiene el formato esperado"}, 500
+                except requests.exceptions.RequestException as e:
+                    self.logger.error(f"Error al llamar al microservicio: {str(e)}")
+                    return {"error": f"Error al llamar al microservicio: {str(e)}"}, 500
+            else:
+                # Si no es un archivo, usar el contenido directamente
+                processed_content = content
+
+        # Validar el request_requirements del usuario
+        is_valid_request_requirements = self.validate_request_requirements(processed_content or user_message)
+        self.logger.debug(f"Validez del request_requirements: {is_valid_request_requirements}")
+        
+        # Si el request_requirements es válido y no hay un nombre de historia, generarlo
         if is_valid_request_requirements and not name_history:
-            name_history = self.name_history_generator.generate_name_history(user_message)
+            name_history = self.name_history_generator.generate_name_history(processed_content or user_message)
             self.logger.debug(f"Nombre de historia generado: {name_history}")
         else:
-            # Si el request_requirementso no es válido, usar las primeras palabras del mensaje como nombre de la historia
-            name_history = name_history or ' '.join(user_message.strip().split()[:5]) 
+            # Si el request_requirements no es válido, usar las primeras palabras del mensaje como nombre de la historia
+            name_history = name_history or ' '.join((processed_content or user_message).strip().split()[:5]) 
             self.logger.debug(f"Nombre de historia generado sin IA: {name_history}")
 
-        # Crear nuevos conversaciones basados en el input
-        new_messages = [
-            {
-                "id": str(uuid.uuid4()),
-                "role": msg['role'],
-                "content": msg['content']
-            } for msg in messages if 'role' in msg and 'content' in msg
-        ]
-        self.logger.debug(f"Nuevos conversaciones creados: {new_messages}")
-        
-        # Calcular tokens de entrada (user), salida (assistant) y total
-        tokens_input = sum(
-            self.count_tokens.count_tokens(msg['content'])
-            for msg in new_messages
-            if msg['role'] == 'user'
-        )
-        tokens_output = sum(
-            self.count_tokens.count_tokens(msg['content'])
-            for msg in new_messages
-            if msg['role'] == 'assistant'
-        )
-        total_tokens = tokens_input + tokens_output
-        self.logger.debug(f"Tokens de entrada: {tokens_input}, Tokens de salida: {tokens_output}, Total tokens: {total_tokens}")
+        # Crear nuevos mensajes
+        new_messages = []
+        try:
+            new_messages = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "role": msg['role'],
+                    "content": msg['content']
+                } for msg in messages if 'role' in msg and 'content' in msg
+            ]
+            self.logger.debug(f"Nuevos mensajes creados: {new_messages}")
+        except Exception as e:
+            self.logger.error(f"Error al crear nuevos mensajes: {str(e)}")
+            return {"error": f"Error al crear nuevos mensajes: {str(e)}"}, 500
+
+        # Contar los tokens dependiendo del tipo de contenido
+        tokens_input = 0
+        try:
+            for message in messages:
+                if message.get('role') == 'user':
+                    content = message.get('content')
+                    if isinstance(content, dict):
+                        # Si es un diccionario (caso de archivo), obtener el campo 'data'
+                        if 'source' in content and 'data' in content['source']:
+                            tokens_input += self.count_tokens.count_tokens(content['source']['data'])
+                        elif 'data' in content:
+                            tokens_input += self.count_tokens.count_tokens(content['data'])
+                    elif isinstance(content, list):
+                        # Si es una lista de archivos, procesar cada uno
+                        for item in content:
+                            if isinstance(item, dict) and 'source' in item and 'data' in item['source']:
+                                tokens_input += self.count_tokens.count_tokens(item['source']['data'])
+                    else:
+                        # Si es una cadena, contar los tokens directamente
+                        tokens_input += self.count_tokens.count_tokens(str(content))
+            self.logger.debug(f"Tokens de entrada: {tokens_input}")
+        except Exception as e:
+            self.logger.error(f"Error al contar los tokens de entrada: {str(e)}")
+            return {"error": f"Error al contar los tokens de entrada: {str(e)}"}, 500
 
         # Generar el mensaje de validación del request_requirements según el tipo de prueba
         if process_phase == "request_requirements":
@@ -111,7 +160,6 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                 ),
                 "validate": is_valid_request_requirements
             }
-
         else:
             # Mensaje genérico para tipos desconocidos
             validation_message = {
@@ -127,11 +175,21 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         updated_messages = new_messages + [validation_message]
         self.logger.debug(f"Conversaciones actualizadas: {updated_messages}")
 
-        # Actualizar tokens de salida y total incluyendo el mensaje de validación
-        validation_tokens = self.count_tokens.count_tokens(validation_message['content'])
-        tokens_output += validation_tokens
-        total_tokens += validation_tokens
-        
+        # Calcular tokens de salida y total
+        try:
+            tokens_output = sum(
+                self.count_tokens.count_tokens(msg['content'])
+                for msg in updated_messages
+                if msg['role'] == 'assistant'
+            )
+            validation_tokens = self.count_tokens.count_tokens(validation_message['content'])
+            tokens_output += validation_tokens
+            total_tokens = tokens_input + tokens_output
+            self.logger.debug(f"Tokens de entrada: {tokens_input}, Tokens de salida: {tokens_output}, Total tokens: {total_tokens}")
+        except Exception as e:
+            self.logger.error(f"Error al contar los tokens de salida: {str(e)}")
+            return {"error": f"Error al contar los tokens de salida: {str(e)}"}, 500
+            
         # Construir la respuesta
         response_data = {
             "_id": conversation_id,
@@ -185,6 +243,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
 
     def validate_request_requirements(self, request_requirements: str) -> bool:
         self.logger.debug(f"Validando request_requirementso: {request_requirements}")
+        
         validation_prompt = self.prompt_validation_request_requirements(request_requirements)
         self.logger.debug(f"Prompt de validación generado: {validation_prompt}")
         response_tuple = self.llm.generate_response(validation_prompt)
@@ -200,14 +259,14 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
     
     def prompt_validation_request_requirements(self, request_requirements: str) -> str:
         return f"""
-        Los requerimientos tecnicos proporcionados deben estar relacionados con un la solicitud de un puesto de trabajo.
-        
-        requerimientos Tecnicos actuales: {request_requirements}
-        
-        Considera los siguientes criterios al evaluar el requerimientos Tecnicos:
-        - ¿El requerimientos tecnicos proporcionados son claros y específicos?
-        - ¿Los requerimientos tecnicos son relevantes para el puesto de trabajo?
-        
-        ¿Este requerimientos Tecnicos cumple con los criterios mencionados?
-        Responde únicamente con 'true' si cumple o 'false' si no cumple, sin ninguna explicación adicional.
+        Responde solo con "True" o "False".
+        Instrucciones:
+        Evalúa los requerimientos técnicos proporcionados y determina si están relacionados con un puesto laboral, cumpliendo con los siguientes criterios. Responde únicamente con "True" o "False".
+
+        Criterios de evaluación:
+        Claridad: ¿Son claros y comprensibles?
+        Especificidad: ¿Incluyen detalles relevantes como habilidades, experiencia, tecnologías o certificaciones específicas?
+        Relevancia: ¿Están alineados con las expectativas de un puesto laboral técnico?
+        Requerimientos técnicos actuales:
+        {request_requirements}
         """

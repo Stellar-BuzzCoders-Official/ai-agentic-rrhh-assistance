@@ -1,9 +1,6 @@
 from src.ports.output_ports.llm_port import LLMPort
+
 import ollama 
-import uuid
-import chromadb
-import os
-import httpx
 
 class OllamaRepository(LLMPort):
     def __init__(self):
@@ -13,20 +10,21 @@ class OllamaRepository(LLMPort):
         
     def generate_response(self, prompt: str) -> str:
         print(f"Generando respuesta para prompt: {prompt[:50]}...")
+        
+        # Llamando a ollama.chat directamente con el prompt
+        print("Llamando a ollama.chat...")
         try:
-            # Llamando a ollama.chat directamente con el prompt
-            print("Llamando a ollama.chat...")
             response = ollama.chat(
                 model="llama3.1:8b",
                 messages=[{'role': 'user', 'content': prompt}],
                 options={'temperature': 0.1}
             )
-            ai_response = response['message']['content']
-            print(f"Respuesta generada: {ai_response[:50]}...")
-            return ai_response
-        except httpx.ConnectError as e:
-            print(f"Error de conexión al servidor Ollama: {e}")
-            return "Error: No se pudo conectar con el servidor de Ollama."
+            print("Conexión con el modelo exitosa.")
         except Exception as e:
-            print(f"Error inesperado: {e}")
-            return "Error: Ocurrió un problema inesperado."
+            print(f"Error al conectar con el modelo: {e}")
+            return "Error al generar respuesta."
+        
+        ai_response = response['message']['content']
+        print(f"Respuesta generada: {ai_response[:50]}...")
+        
+        return ai_response
