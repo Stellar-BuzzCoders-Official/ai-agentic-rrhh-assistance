@@ -28,8 +28,8 @@ class MongoDBRepository(MongoDBPort):
         self.logger.info("collection conversations creado")
         self.collection_user = self.db['users']
         self.logger.info("collection users creado")
-        self.collection_file = self.db['capabilities']
-        self.logger.info("collection files creado")
+        self.collection_capabilities = self.db['capabilities']
+        self.logger.info("collection capabilities creado")
         logger.info("Conexión a MongoDB establecida.")
 
     def save_conversation(self, conversation: dict):
@@ -249,4 +249,75 @@ class MongoDBRepository(MongoDBPort):
             raise
         except Exception as e:
             self.logger.error(f"[MONGO] Error inesperado al borrar todos los usuarios: {str(e)}")
+            raise
+    
+    def save_capability(self, capability_data: dict):
+        """
+        Guarda o actualiza la información de la capacidad en la colección 'capabilities'.
+        
+        Args:
+            capability_data (dict): Datos de la capacidad a guardar.
+        """
+        try:
+            capability_id = capability_data.get('_id')
+            if not capability_id:
+                capability_id = ObjectId()
+                capability_data['_id'] = capability_id
+            
+            result = self.collection_capabilities.update_one(
+                {"_id": capability_id},  # Filtro para encontrar el documento
+                {"$set": capability_data},  # Actualizar los campos con la información de la capacidad
+                upsert=True  # Insertar si no existe
+            )
+
+            if result.matched_count > 0:
+                self.logger.info(f"[MONGO] Capacidad actualizada con _id: {capability_id}")
+            elif result.upserted_id is not None:
+                self.logger.info(f"[MONGO] Nueva capacidad insertada con _id: {capability_id}")
+        except PyMongoError as e:
+            self.logger.error(f"[MONGO] Error al guardar capacidad: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"[MONGO] Error inesperado al guardar capacidad: {str(e)}")
+            raise
+    
+    def get_capability_by_id(self, capability_id: str) -> dict:
+        """
+        Recupera una capacidad específica de la colección 'capabilities' por su _id.
+        
+        Args:
+            capability_id (str): El _id de la capacidad a recuperar.
+        
+        Returns:
+            dict: Los datos de la capacidad o None si no se encuentra.
+        """
+        try:
+            capability = self.collection_capabilities.find_one({"_id": ObjectId(capability_id)})
+            if capability:
+                self.logger.info(f"Se ha recuperado la capacidad con _id {capability_id} de MongoDB.")
+            else:
+                self.logger.info(f"No se encontró ninguna capacidad con _id {capability_id} en MongoDB.")
+            return capability
+        except PyMongoError as e:
+            self.logger.error(f"Error al recuperar la capacidad con _id {capability_id} de MongoDB: {str(e)}")
+            raise
+    def get_all_capabilities(self) -> List[dict]:
+        """
+        Recupera todas las capacidades de la colección 'capabilities'.
+        
+        Returns:
+            list: Una lista de todas las capacidades con _id serializable.
+        """
+        try:
+            capabilities = list(self.collection_capabilities.find())
+            for capability in capabilities:
+                # Convertir ObjectId a string
+                capability["_id"] = str(capability["_id"])
+            self.logger.info(f"Se han recuperado {len(capabilities)} capacidades de MongoDB.")
+            return capabilities
+        except PyMongoError as e:
+            self.logger.error(f"Error al recuperar todas las capacidades de MongoDB: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Error inesperado al recuperar todas las capacidades de MongoDB: {str(e)}")
             raise

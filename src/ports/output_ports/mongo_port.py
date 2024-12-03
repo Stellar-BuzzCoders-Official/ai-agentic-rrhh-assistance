@@ -58,3 +58,28 @@ class MongoDBPort(ABC):
         :param query: Diccionario de consulta
         :return: Documento encontrado o None si no se encuentra"""
         pass
+    @abstractmethod
+    def save_capability(self, capability_data: dict):
+        """_summary_
+
+        Args:
+            capability_data (dict): _description_
+        """
+        pass
+    @abstractmethod
+    def get_capability_by_id(self, capability_id: str) -> dict:
+        """_summary_
+
+        Args:
+            capability_id (str): _description_
+
+        Returns:
+            dict: _description_
+        """
+        pass
+    @abstractmethod
+    def get_all_capabilities(self) -> List[dict]:
+        """_summary_ Returns:
+            List[dict]: _description_
+        """
+        pass

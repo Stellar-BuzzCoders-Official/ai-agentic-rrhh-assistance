@@ -64,7 +64,6 @@ def test_generate_cases():
         app.logger.error(f"Error interno: {str(e)}", exc_info=True)  # exc_info=True incluye el stack trace
         return jsonify({"error": "Ocurrió un error interno del servidor."}), 500
 
-
 @app.route('/newChat/', methods=['POST'])
 def new_chat():
     """Endpoint para iniciar una nueva conversación y limpiar la caché."""
@@ -139,7 +138,7 @@ def delete_history(user_ID):
     except (PyMongoError, Exception) as e:
         return jsonify({"error": f"Error al eliminar el historial de conversaciones: {str(e)}"}), 500
 
-@app.route('/user', methods=['POST'])
+@app.route('/createUser', methods=['POST'])
 def create_user():
     try:
         # Obtener los datos del usuario desde el cuerpo de la solicitud
@@ -195,6 +194,25 @@ def delete_all_users():
             "error": "Ha ocurrido un error al intentar borrar todos los usuarios.",
             "details": str(e)
         }), 500
+        
+@app.route('/capability/<string:capability_id>', methods=['GET'])
+def get_capability_by_id(capability_id):
+    try:
+        capability = mongo_repo.get_capability_by_id(capability_id)
+        if capability:
+            return jsonify(capability), 200
+        else:
+            return jsonify({"error": "Capacidad no encontrada"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/capabilities', methods=['GET'])
+def get_all_capabilities():
+    try:
+        capabilities = mongo_repo.get_all_capabilities()
+        return jsonify({"capabilities": capabilities}), 200
+    except Exception as e:
+                return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("Iniciando la aplicación Flask en modo depuración...")

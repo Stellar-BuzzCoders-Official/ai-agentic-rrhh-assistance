@@ -10,6 +10,7 @@ from src.ports.output_ports.llm_port import LLMPort
 from src.ports.test_cases_ports.count_tokens_port import CountTokensPort
 import requests
 import os
+import json
 
 class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
     def __init__(self, llm: LLMPort, mongo_repo: MongoDBPort, name_history_generator: 
@@ -104,6 +105,18 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             name_history = name_history or ' '.join((processed_content or user_message).strip().split()[:5]) 
             self.logger.debug(f"Nombre de historia generado sin IA: {name_history}")
 
+        if is_valid_request_requirements:
+            try:
+                # Extract capabilities from the validated requirements
+                capabilities = self.extract_capabilities(processed_content or user_message)
+                
+                # Save the extracted capabilities
+                self.mongo_repo.save_capability(capabilities)
+                
+                self.logger.info(f"Capabilities extracted and saved: {capabilities}")
+            except Exception as e:
+                self.logger.error(f"Error in extracting or saving capabilities: {str(e)}")
+                
         # Crear nuevos mensajes
         new_messages = []
         try:
@@ -270,3 +283,63 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         Requerimientos técnicos actuales:
         {request_requirements}
         """
+    
+    def prompt_extract_capabilities(self, request_requirements: str) -> str:
+        return f"""
+        Instrucciones:
+        Analiza el siguiente texto para extraer las habilidades técnicas, tecnologías y conocimientos requeridos para un puesto laboral técnico.
+        Responde con una lista de objetos JSON, donde cada objeto representa una capacidad técnica.
+        Cada objeto debe incluir:
+        - "name": El nombre de la capacidad técnica.
+        - "category": Una categoría general para la capacidad técnica.
+
+        Ejemplo de entrada:
+        "Busco un desarrollador con experiencia en Python, Docker y React."
+
+        Ejemplo de salida:
+        [
+            {{ "name": "Python", "category": "Programming Language" }},
+            {{ "name": "Docker", "category": "DevOps Tool" }},
+            {{ "name": "React", "category": "Frontend Framework" }}
+        ]
+
+        Texto del requerimiento:
+        {request_requirements}
+        """
+
+    def extract_capabilities(self, request_requirements: str) -> dict:
+        self.logger.debug(f"Extrayendo capacidades de: {request_requirements}")
+        
+        extraction_prompt = self.prompt_extract_capabilities(request_requirements)
+        self.logger.debug(f"Prompt de extracción generado: {extraction_prompt}")
+        response_tuple = self.llm.generate_response(extraction_prompt)
+        self.logger.debug(f"Respuesta original del modelo: {response}")
+
+
+        # Asumimos que la respuesta está en el primer elemento de la tupla
+        if isinstance(response_tuple, tuple) and len(response_tuple) > 0:
+            response = response_tuple[0]
+        else:
+            response = str(response_tuple)
+        
+        self.logger.debug(f"Respuesta de extracción: {response}")
+
+        try:
+            # Parseamos la respuesta como una lista de capacidades técnicas
+            technical_skills = json.loads(response)
+            if not isinstance(technical_skills, list):
+                raise ValueError("La respuesta no es una lista.")
+        except Exception as e:
+            self.logger.error(f"Error al parsear las capacidades técnicas: {e}")
+            technical_skills = []
+
+        # Construimos la estructura final
+        result = {
+            "requirement_text": request_requirements,
+            "technical_skills": technical_skills,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+
+        self.logger.debug(f"Estructura final generada: {result}")
+        return result
