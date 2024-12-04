@@ -321,3 +321,21 @@ class MongoDBRepository(MongoDBPort):
         except Exception as e:
             self.logger.error(f"Error inesperado al recuperar todas las capacidades de MongoDB: {str(e)}")
             raise
+    def delete_all_capabilities(self) -> int:
+        """
+        Borra todas las capacidades de la colección 'capabilities'.
+        
+        Returns:
+            int: El número de capacidades borradas.
+        """
+        try:
+            result = self.collection_capabilities.delete_many({})
+            deleted_count = result.deleted_count
+            self.logger.info(f"[MONGO] Se han borrado {deleted_count} capacidades de la colección 'capabilities'.")
+            return deleted_count
+        except PyMongoError as e:
+            self.logger.error(f"[MONGO] Error al borrar todas las capacidades: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"[MONGO] Error inesperado al borrar todas las capacidades: {str(e)}")
+            raise

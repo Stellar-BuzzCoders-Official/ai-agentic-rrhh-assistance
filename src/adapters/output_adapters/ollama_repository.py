@@ -8,21 +8,16 @@ class OllamaRepository(LLMPort):
         # No se necesita inicializar ChromaDB
         print("OllamaRepository inicializado correctamente.")
         
-    def generate_response(self, prompt: str) -> str:
+    def generate_response(self, prompt:  None) -> str:
         print(f"Generando respuesta para prompt: {prompt[:50]}...")
         
         # Llamando a ollama.chat directamente con el prompt
         print("Llamando a ollama.chat...")
-        try:
-            response = ollama.chat(
-                model="llama3.1:8b",
-                messages=[{'role': 'user', 'content': prompt}],
-                options={'temperature': 0.1}
-            )
-            print("Conexión con el modelo exitosa.")
-        except Exception as e:
-            print(f"Error al conectar con el modelo: {e}")
-            return "Error al generar respuesta."
+        response = ollama.chat(
+            model="llama3.1:8b",
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0.1}
+        )
         
         ai_response = response['message']['content']
         print(f"Respuesta generada: {ai_response[:50]}...")

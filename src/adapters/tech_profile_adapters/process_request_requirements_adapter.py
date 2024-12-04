@@ -63,7 +63,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             return {"error": "Error al verificar el userID en la base de datos."}, 500
 
         # Procesar el último mensaje
-        processed_content = None
+        request_requirements = None
         message = messages[-1] if messages else None
 
         if message and message.get('role') == 'user':
@@ -75,12 +75,12 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                     self.logger.debug(f"Procesando archivo con el microservicio: {content}")
                     response = requests.post(self.api_extractor_text_url, json=content)
                     response.raise_for_status()
-                    processed_data = response.json()
+                    request_requirements = response.json()
 
                     # Reemplazar completamente el content con la respuesta del microservicio
-                    if processed_data and isinstance(processed_data, dict):
-                        message['content'] = processed_data
-                        processed_content = processed_data.get('source', {}).get('data', "")
+                    if request_requirements and isinstance(request_requirements, dict):
+                        message['content'] = request_requirements
+                        request_requirements = request_requirements.get('source', {}).get('data', "")
                         self.logger.debug(f"Archivo procesado y actualizado: {message['content']}")
                     else:
                         self.logger.error("La respuesta del microservicio no tiene el formato esperado")
@@ -90,25 +90,25 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                     return {"error": f"Error al llamar al microservicio: {str(e)}"}, 500
             else:
                 # Si no es un archivo, usar el contenido directamente
-                processed_content = content
+                request_requirements = content
 
         # Validar el request_requirements del usuario
-        is_valid_request_requirements = self.validate_request_requirements(processed_content or user_message)
+        is_valid_request_requirements = self.validate_request_requirements(request_requirements or user_message)
         self.logger.debug(f"Validez del request_requirements: {is_valid_request_requirements}")
         
         # Si el request_requirements es válido y no hay un nombre de historia, generarlo
         if is_valid_request_requirements and not name_history:
-            name_history = self.name_history_generator.generate_name_history(processed_content or user_message)
+            name_history = self.name_history_generator.generate_name_history(request_requirements or user_message)
             self.logger.debug(f"Nombre de historia generado: {name_history}")
         else:
             # Si el request_requirements no es válido, usar las primeras palabras del mensaje como nombre de la historia
-            name_history = name_history or ' '.join((processed_content or user_message).strip().split()[:5]) 
+            name_history = name_history or ' '.join((request_requirements or user_message).strip().split()[:5]) 
             self.logger.debug(f"Nombre de historia generado sin IA: {name_history}")
 
         if is_valid_request_requirements:
             try:
                 # Extract capabilities from the validated requirements
-                capabilities = self.extract_capabilities(processed_content or user_message)
+                capabilities = self.extract_capabilities(request_requirements or user_message)
                 
                 # Save the extracted capabilities
                 self.mongo_repo.save_capability(capabilities)
@@ -286,60 +286,54 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
     
     def prompt_extract_capabilities(self, request_requirements: str) -> str:
         return f"""
-        Instrucciones:
-        Analiza el siguiente texto para extraer las habilidades técnicas, tecnologías y conocimientos requeridos para un puesto laboral técnico.
-        Responde con una lista de objetos JSON, donde cada objeto representa una capacidad técnica.
-        Cada objeto debe incluir:
-        - "name": El nombre de la capacidad técnica.
-        - "category": Una categoría general para la capacidad técnica.
+        INSTRUCCIONES ABSOLUTAMENTE ESTRICTAS:
+        - Extrae las capacidades.
+        - Devuelve las capacidades técnicas como un texto, separadas por comas.
+        - NO incluyas explicaciones adicionales.
 
-        Ejemplo de entrada:
-        "Busco un desarrollador con experiencia en Python, Docker y React."
-
-        Ejemplo de salida:
-        [
-            {{ "name": "Python", "category": "Programming Language" }},
-            {{ "name": "Docker", "category": "DevOps Tool" }},
-            {{ "name": "React", "category": "Frontend Framework" }}
-        ]
-
-        Texto del requerimiento:
+        Texto a analizar:
         {request_requirements}
         """
 
     def extract_capabilities(self, request_requirements: str) -> dict:
-        self.logger.debug(f"Extrayendo capacidades de: {request_requirements}")
+        self.logger.debug(f"Inicio de extracción de capacidades. Texto de requerimiento: '{request_requirements}'")
         
+        # Generar el prompt de extracción
         extraction_prompt = self.prompt_extract_capabilities(request_requirements)
         self.logger.debug(f"Prompt de extracción generado: {extraction_prompt}")
-        response_tuple = self.llm.generate_response(extraction_prompt)
-        self.logger.debug(f"Respuesta original del modelo: {response}")
-
-
-        # Asumimos que la respuesta está en el primer elemento de la tupla
-        if isinstance(response_tuple, tuple) and len(response_tuple) > 0:
-            response = response_tuple[0]
-        else:
-            response = str(response_tuple)
         
-        self.logger.debug(f"Respuesta de extracción: {response}")
-
         try:
-            # Parseamos la respuesta como una lista de capacidades técnicas
-            technical_skills = json.loads(response)
-            if not isinstance(technical_skills, list):
-                raise ValueError("La respuesta no es una lista.")
+            # Llamada al modelo
+            self.logger.debug("Llamando al modelo LLM con el prompt...")
+            response_tuple = self.llm.generate_response(extraction_prompt)
+            
+            # Verificación detallada de la respuesta
+            if not response_tuple:
+                self.logger.error("La respuesta del modelo es nula o vacía (response_tuple vacío).")
+                raise ValueError("La respuesta del modelo no es válida o está vacía.")
+            
+            self.logger.debug(f"Respuesta obtenida del modelo: {response_tuple}")
+            
+            response = response_tuple 
+            
+            # La respuesta es un string de habilidades técnicas separadas por comas
+            capacibilities = response  # Guardamos directamente la respuesta como string
+            
+            self.logger.debug(f"Habilidades técnicas extraídas: {capacibilities}")
+        
         except Exception as e:
-            self.logger.error(f"Error al parsear las capacidades técnicas: {e}")
-            technical_skills = []
-
+            self.logger.error(f"Error general al procesar la respuesta: {e}", exc_info=True)
+            capacibilities = ""
+        
         # Construimos la estructura final
         result = {
+            "conversation_id": self.conversation_id,
+            "id": str(uuid.uuid4()),
             "requirement_text": request_requirements,
-            "technical_skills": technical_skills,
+            "Capacidades": capacibilities,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
         }
-
+        
         self.logger.debug(f"Estructura final generada: {result}")
         return result

@@ -111,6 +111,15 @@ def get_conversation_by_id(conversation_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/get_all_conversations/<user_id>', methods=['GET'])
+def get_all_conversations(user_id):
+    try:
+        conversations = mongo_repo.get_all_conversations(user_id)
+        return jsonify({"conversations": conversations}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/delete_conversation/<conversation_id>', methods=['DELETE'])
 def update_conversation_user_story(conversation_id):
     """Elimina un conversaciones de MongoDB por su UUID."""
@@ -213,6 +222,20 @@ def get_all_capabilities():
         return jsonify({"capabilities": capabilities}), 200
     except Exception as e:
                 return jsonify({"error": str(e)}), 500
+
+@app.route('/delete_capabilities', methods=['DELETE'])
+def delete_all_capabilities():
+    try:
+        deleted_count = mongo_repo.delete_all_capabilities()
+        return jsonify({
+            "message": f"Se han borrado {deleted_count} capacidades exitosamente.",
+            "deleted_count": deleted_count
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "error": "Ha ocurrido un error al intentar borrar todas las capacidades.",
+            "details": str(e)
+        }), 500
 
 if __name__ == '__main__':
     print("Iniciando la aplicación Flask en modo depuración...")

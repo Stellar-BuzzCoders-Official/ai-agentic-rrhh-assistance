@@ -83,3 +83,11 @@ class MongoDBPort(ABC):
             List[dict]: _description_
         """
         pass
+    @abstractmethod
+    def delete_all_capabilities(self) -> int:
+        """_summary_
+
+        Returns:
+            int: _description_
+        """
+        pass
