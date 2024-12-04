@@ -1,5 +1,6 @@
 
 import uuid
+import re
 import logging
 from datetime import datetime
 from src.ports.test_cases_ports.process_request_requirements_port import ProcessRequestRequirementsPort
@@ -21,6 +22,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.mongo_repo = mongo_repo
         self.conversation_manager = conversation_manager
         self.conversation_history = {}
+        self.conversation_id = None
         self.logger = logging.getLogger(__name__)
         self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://localhost:7000/process-file')
         self.logger.info("ProcessUserStorydapter initialized")
@@ -29,8 +31,12 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         """Procesa el testType 'request_requirements'."""
         self.logger.debug("Procesando test_type 'request_requirements'...")
 
-        # Extraer datos necesarios del input
-        conversation_id = input_data['data'].get('conversation_id') or str(uuid.uuid4())
+        # Solo reasignar si no existe aún
+        if not self.conversation_id:
+            self.conversation_id = input_data['data'].get('conversation_id') or str(uuid.uuid4())
+            self.logger.debug(f"Conversation ID asignado: {self.conversation_id}")
+        else:
+            self.logger.debug(f"Conversation ID ya existente: {self.conversation_id}")
         date_created = input_data['data'].get('created') or datetime.utcnow().isoformat()
         messages = input_data['data'].get('message', [])
         name_history = input_data['data'].get('nameHistory')
@@ -44,7 +50,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             self.logger.error("El valor de 'isSelectBlock' no es booleano.")
             return {"error": "El valor de 'isSelectBlock' debe ser booleano."}, 400
         
-        self.logger.debug(f"conversation_id: {conversation_id}, date_created: {date_created}, name_history: {name_history}, user_id: {user_id}")
+        self.logger.debug(f"conversation_id: {self.conversation_id}, date_created: {date_created}, name_history: {name_history}, user_id: {user_id}")
         
         # Validar que el userID exista
         if not user_id:
@@ -157,6 +163,25 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             self.logger.error(f"Error al contar los tokens de entrada: {str(e)}")
             return {"error": f"Error al contar los tokens de entrada: {str(e)}"}, 500
 
+        # Formatear el contenido después de contar los tokens
+        for message in new_messages:
+            if message.get('role') == 'user':
+                content = message.get('content')
+                if isinstance(content, dict) and 'source' in content:
+                    # Crear un nuevo diccionario con los campos deseados
+                    formatted_content = {
+                        "file_name": content.get('file_name', ''),
+                        "file_size": content.get('file_size', 0),
+                        "file_type": content.get('file_type', ''),
+                        "file_url": content.get('file_url', ''),
+                        "status": content.get('source', {}).get('status', 'unknown')
+                    }
+                    
+                    # Actualizar el mensaje con el contenido formateado
+                    message['content'] = formatted_content
+                    
+                    self.logger.debug(f"Contenido de mensaje formateado: {message['content']}")
+                
         # Generar el mensaje de validación del request_requirements según el tipo de prueba
         if process_phase == "request_requirements":
             validation_message = {
@@ -205,9 +230,9 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             
         # Construir la respuesta
         response_data = {
-            "_id": conversation_id,
+            "_id": self.conversation_id,
             "created": date_created,
-            "conversation_id": conversation_id,
+            "conversation_id": self.conversation_id,
             "nameHistory": name_history,
             "userID": user_id,
             'step': step,
@@ -223,9 +248,9 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         
         # Preparar documento para MongoDB
         message_to_save = {
-            "_id": conversation_id,
+            "_id": self.conversation_id,
             "data": {
-                "conversationId": conversation_id,
+                "conversationId": self.conversation_id,
                 "nameHistory": name_history,
                 "userID": user_id,
                 "step": step,
@@ -247,29 +272,50 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.logger.info("conversaciones guardados en MongoDB.")
         
         # Guardar la conversación en la historia
-        self.conversation_history[conversation_id] = updated_messages
-        self.conversation_manager.save_conversation(conversation_id, user_message, name_history, is_valid_request_requirements)
+        self.conversation_history[self.conversation_id] = updated_messages
+        self.conversation_manager.save_conversation(self.conversation_id, user_message, name_history, is_valid_request_requirements)
 
         self.logger.info("Conversación guardada exitosamente.")
 
         return {"data": response_data}, 200
 
     def validate_request_requirements(self, request_requirements: str) -> bool:
-        self.logger.debug(f"Validando request_requirementso: {request_requirements}")
+        self.logger.debug(f"Validando request_requirements: {request_requirements}")
         
+        # Generar el prompt de validación
         validation_prompt = self.prompt_validation_request_requirements(request_requirements)
         self.logger.debug(f"Prompt de validación generado: {validation_prompt}")
+        
+        # Llamar a la generación de respuesta
         response_tuple = self.llm.generate_response(validation_prompt)
-
-        # Asumimos que la respuesta está en el primer elemento de la tupla
+        
+        # Asegurarse de que la respuesta sea una tupla y tenga contenido
         if isinstance(response_tuple, tuple) and len(response_tuple) > 0:
             response = response_tuple[0]
         else:
-            response = str(response_tuple)  
+            response = str(response_tuple)
+        
+        # Depuración: Mostrar la respuesta antes de limpiarla
+        self.logger.debug(f"Respuesta del LLM antes de limpieza: '{response}'")
+        
+        # Limpiar la respuesta usando expresiones regulares para eliminar cualquier carácter no deseado
+        cleaned_response = re.sub(r'[^a-zA-Z]', '', response.strip().lower())
+        
+        # Depuración: Mostrar la respuesta limpia
+        self.logger.debug(f"Respuesta limpia: '{cleaned_response}'")
 
-        self.logger.debug(f"Respuesta del LLM: {response}")
-        return response.strip().lower() == 'true'
-    
+        # Validar que la respuesta limpia sea "true" o "false"
+        if cleaned_response == 'true':
+            self.logger.debug("Validación exitosa: La respuesta es 'True'.")
+            return True
+        elif cleaned_response == 'false':
+            self.logger.debug("Validación fallida: La respuesta es 'False'.")
+            return False
+        else:
+            # Si la respuesta no es "true" o "false", loguear un mensaje de advertencia
+            self.logger.warning(f"Respuesta inesperada: {cleaned_response}. Esperado 'True' o 'False'.")
+            return False
+
     def prompt_validation_request_requirements(self, request_requirements: str) -> str:
         return f"""
         Responde solo con "True" o "False".
@@ -282,6 +328,8 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         Relevancia: ¿Están alineados con las expectativas de un puesto laboral técnico?
         Requerimientos técnicos actuales:
         {request_requirements}
+        
+        No incluyas comentarios adicionales, solo responde con "True" o "False".
         """
     
     def prompt_extract_capabilities(self, request_requirements: str) -> str:
@@ -299,6 +347,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.logger.debug(f"Inicio de extracción de capacidades. Texto de requerimiento: '{request_requirements}'")
         
         # Generar el prompt de extracción
+        capacibilitie_id = str(uuid.uuid4()) # ID único para la capacidad
         extraction_prompt = self.prompt_extract_capabilities(request_requirements)
         self.logger.debug(f"Prompt de extracción generado: {extraction_prompt}")
         
@@ -327,8 +376,9 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         
         # Construimos la estructura final
         result = {
+            "_id": capacibilitie_id,
             "conversation_id": self.conversation_id,
-            "id": str(uuid.uuid4()),
+            "capacibilitie_id": capacibilitie_id,
             "requirement_text": request_requirements,
             "Capacidades": capacibilities,
             "created_at": datetime.now().isoformat(),
