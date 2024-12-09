@@ -36,7 +36,13 @@ class MongoDBPort(ABC):
         """Actualiza una conversacion en MongoDB."""
 
     @abstractmethod
-    def update_conversation_user_story(self, conversation_id, update_fields):
+    def update_conversation_cv_and_match(self, conversation_id, update_fields):
+        """_summary_
+
+        Args:
+            conversation_id (_type_): _description_
+            update_fields (_type_): _description_
+        """
         pass
     @abstractmethod
     def delete_history_conversation(self):
@@ -89,5 +95,16 @@ class MongoDBPort(ABC):
 
         Returns:
             int: _description_
+        """
+        pass
+    @abstractmethod
+    def get_capabilities_by_conversation_id(self, conversation_id: str) -> List[dict]:
+        """_summary_
+
+        Args:
+            conversation_id (str): _description_
+
+        Returns:
+            List[dict]: _description_
         """
         pass

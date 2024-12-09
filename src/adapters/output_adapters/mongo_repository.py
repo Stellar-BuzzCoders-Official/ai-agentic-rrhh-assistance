@@ -75,7 +75,7 @@ class MongoDBRepository(MongoDBPort):
             self.logger.error(f"Error inesperado al actualizar conversacion: {str(e)}")
             raise
 
-    def update_conversation_user_story(self, conversation_id, update_fields):
+    def update_conversation_cv_and_match(self, conversation_id, update_fields):
         """
         Actualiza la conversación en MongoDB, sin incluir el campo nameHistory.
 
@@ -338,4 +338,29 @@ class MongoDBRepository(MongoDBPort):
             raise
         except Exception as e:
             self.logger.error(f"[MONGO] Error inesperado al borrar todas las capacidades: {str(e)}")
+            raise
+    
+    def get_capabilities_by_conversation_id(self, conversation_id: str) -> List[dict]:
+        """
+        Recupera las capacidades de la colección 'capabilities' basadas en el 'conversation_id'.
+        
+        Args:
+            conversation_id (str): El ID de la conversación para filtrar las capacidades.
+        
+        Returns:
+            list: Una lista de capacidades correspondientes al 'conversation_id' proporcionado.
+        """
+        try:
+            capabilities = list(self.collection_capabilities.find({"conversation_id": conversation_id}))
+            
+            for capability in capabilities:
+                capability["_id"] = str(capability["_id"])
+            
+            self.logger.info(f"Se han recuperado {len(capabilities)} capacidades para la conversación {conversation_id}.")
+            return capabilities
+        except PyMongoError as e:
+            self.logger.error(f"Error al recuperar capacidades de MongoDB para el 'conversation_id' {conversation_id}: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Error inesperado al recuperar capacidades para el 'conversation_id' {conversation_id}: {str(e)}")
             raise

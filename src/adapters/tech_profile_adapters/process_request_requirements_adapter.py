@@ -30,13 +30,24 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
     def _process_request_requirements(self, input_data, conversation_id, user_message, previous_messages):
         """Procesa el testType 'request_requirements'."""
         self.logger.debug("Procesando test_type 'request_requirements'...")
-
-        # Solo reasignar si no existe aún
+    
         if not self.conversation_id:
             self.conversation_id = input_data['data'].get('conversation_id') or str(uuid.uuid4())
             self.logger.debug(f"Conversation ID asignado: {self.conversation_id}")
         else:
             self.logger.debug(f"Conversation ID ya existente: {self.conversation_id}")
+        try:
+            existing_conversation = self.mongo_repo.get_conversation_by_id(self.conversation_id)
+            existing_messages = existing_conversation.get('data', {}).get('message', [])
+            tokens_input_existing = existing_conversation.get('data', {}).get('tokens_input', 0)
+            tokens_output_existing = existing_conversation.get('data', {}).get('tokens_output', 0)
+        except (ValueError, Exception):
+            # Si no existe la conversación, iniciar con lista vacía
+            existing_messages = []
+            tokens_input_existing = 0
+            tokens_output_existing = 0
+            self.logger.debug("No se encontró conversación existente. Iniciando nueva.")
+
         date_created = input_data['data'].get('created') or datetime.utcnow().isoformat()
         messages = input_data['data'].get('message', [])
         name_history = input_data['data'].get('nameHistory')
@@ -151,7 +162,6 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                         elif 'data' in content:
                             tokens_input += self.count_tokens.count_tokens(content['data'])
                     elif isinstance(content, list):
-                        # Si es una lista de archivos, procesar cada uno
                         for item in content:
                             if isinstance(item, dict) and 'source' in item and 'data' in item['source']:
                                 tokens_input += self.count_tokens.count_tokens(item['source']['data'])
@@ -177,7 +187,6 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                         "status": content.get('source', {}).get('status', 'unknown')
                     }
                     
-                    # Actualizar el mensaje con el contenido formateado
                     message['content'] = formatted_content
                     
                     self.logger.debug(f"Contenido de mensaje formateado: {message['content']}")
@@ -222,12 +231,20 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             )
             validation_tokens = self.count_tokens.count_tokens(validation_message['content'])
             tokens_output += validation_tokens
-            total_tokens = tokens_input + tokens_output
-            self.logger.debug(f"Tokens de entrada: {tokens_input}, Tokens de salida: {tokens_output}, Total tokens: {total_tokens}")
+            
         except Exception as e:
             self.logger.error(f"Error al contar los tokens de salida: {str(e)}")
             return {"error": f"Error al contar los tokens de salida: {str(e)}"}, 500
             
+        # Combinar mensajes existentes con nuevos mensajes
+        combined_messages = existing_messages + new_messages
+        combined_messages.append(validation_message)
+        
+        tokens_input += tokens_input_existing 
+        tokens_output += tokens_output_existing
+        
+        total_tokens = tokens_input + tokens_output
+        
         # Construir la respuesta
         response_data = {
             "_id": self.conversation_id,
@@ -243,10 +260,9 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             "tokens_output": tokens_output,
             "tokens": total_tokens,
             "max_tokens": max_tokens,
-            "message": updated_messages
+            "message": [validation_message]
         }
         
-        # Preparar documento para MongoDB
         message_to_save = {
             "_id": self.conversation_id,
             "data": {
@@ -262,7 +278,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
                 "tokens": total_tokens,
                 "max_tokens": max_tokens,
                 "message": [
-                    msg for msg in updated_messages 
+                    msg for msg in combined_messages 
                     if msg['role'] in ["user", "assistant", "system"]
                 ]
             }
@@ -272,7 +288,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.logger.info("conversaciones guardados en MongoDB.")
         
         # Guardar la conversación en la historia
-        self.conversation_history[self.conversation_id] = updated_messages
+        self.conversation_history[self.conversation_id] = combined_messages
         self.conversation_manager.save_conversation(self.conversation_id, user_message, name_history, is_valid_request_requirements)
 
         self.logger.info("Conversación guardada exitosamente.")
@@ -294,17 +310,14 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             response = response_tuple[0]
         else:
             response = str(response_tuple)
-        
-        # Depuración: Mostrar la respuesta antes de limpiarla
+
         self.logger.debug(f"Respuesta del LLM antes de limpieza: '{response}'")
         
-        # Limpiar la respuesta usando expresiones regulares para eliminar cualquier carácter no deseado
         cleaned_response = re.sub(r'[^a-zA-Z]', '', response.strip().lower())
         
         # Depuración: Mostrar la respuesta limpia
         self.logger.debug(f"Respuesta limpia: '{cleaned_response}'")
 
-        # Validar que la respuesta limpia sea "true" o "false"
         if cleaned_response == 'true':
             self.logger.debug("Validación exitosa: La respuesta es 'True'.")
             return True
@@ -312,7 +325,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             self.logger.debug("Validación fallida: La respuesta es 'False'.")
             return False
         else:
-            # Si la respuesta no es "true" o "false", loguear un mensaje de advertencia
+
             self.logger.warning(f"Respuesta inesperada: {cleaned_response}. Esperado 'True' o 'False'.")
             return False
 
@@ -326,6 +339,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         Claridad: ¿Son claros y comprensibles?
         Especificidad: ¿Incluyen detalles relevantes como habilidades, experiencia, tecnologías o certificaciones específicas?
         Relevancia: ¿Están alineados con las expectativas de un puesto laboral técnico?
+        Detalla el nivel y si es indispensable o deseable.
         Requerimientos técnicos actuales:
         {request_requirements}
         
@@ -347,12 +361,12 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.logger.debug(f"Inicio de extracción de capacidades. Texto de requerimiento: '{request_requirements}'")
         
         # Generar el prompt de extracción
-        capacibilitie_id = str(uuid.uuid4()) # ID único para la capacidad
+        capacibilitie_id = str(uuid.uuid4()) 
         extraction_prompt = self.prompt_extract_capabilities(request_requirements)
         self.logger.debug(f"Prompt de extracción generado: {extraction_prompt}")
         
         try:
-            # Llamada al modelo
+            
             self.logger.debug("Llamando al modelo LLM con el prompt...")
             response_tuple = self.llm.generate_response(extraction_prompt)
             
@@ -365,16 +379,14 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
             
             response = response_tuple 
             
-            # La respuesta es un string de habilidades técnicas separadas por comas
-            capacibilities = response  # Guardamos directamente la respuesta como string
+            capacibilities = response  
             
             self.logger.debug(f"Habilidades técnicas extraídas: {capacibilities}")
         
         except Exception as e:
             self.logger.error(f"Error general al procesar la respuesta: {e}", exc_info=True)
             capacibilities = ""
-        
-        # Construimos la estructura final
+
         result = {
             "_id": capacibilitie_id,
             "conversation_id": self.conversation_id,

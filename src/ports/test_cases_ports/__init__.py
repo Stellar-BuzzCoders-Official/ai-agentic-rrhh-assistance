@@ -1,3 +1,3 @@
 from .process_request_requirements_port import ProcessRequestRequirementsPort
-from .process_user_story_port import ProcessUserStoryPort
+from .process_request_cv_port import ProcessRequestCvPort
 from .test_case_prompt_generator_port import TestCasePromptGeneratorPort
