@@ -4,6 +4,6 @@ from abc import ABC, abstractmethod
 
 class TestCasePromptGeneratorPort(ABC):
     @abstractmethod
-    def promt_generate_technical_report(self, capabilities: str, request_cv: str) -> str:
+    def prompt_generate_technical_report(self, capabilities: str, request_cv: str) -> str:
         """Genera el informe técnico de una historia de usuario."""
         pass

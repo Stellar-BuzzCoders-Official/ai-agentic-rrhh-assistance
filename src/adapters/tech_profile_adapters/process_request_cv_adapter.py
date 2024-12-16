@@ -25,7 +25,7 @@ class ProcessCvAdapter(ProcessRequestCvPort):
         self.conversation_history = {}
         self.conversation_id = None
         self.logger = logging.getLogger(__name__)
-        self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://localhost:7000/process-file')
+        self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://joyit-cn-ai-storage-text-extraction:7000/process-file')
 
     def _process_request_cv(self, input_data, conversation_id,user_message, previous_messages):
         """Procesa una historia de usuario y genera casos de prueba."""
@@ -175,7 +175,7 @@ class ProcessCvAdapter(ProcessRequestCvPort):
                 
         if process_phase == "upload_cv_and_match":
             if is_valid_request_cv:
-                technical_report = self.prompt_generator.promt_generate_technical_report(capabilities,request_cv)
+                technical_report = self.prompt_generator.prompt_generate_technical_report(capabilities,request_cv)
                 validation_message = {
                     "id": str(uuid.uuid4()),
                     "role": "assistant",

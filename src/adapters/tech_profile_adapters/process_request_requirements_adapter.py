@@ -24,7 +24,7 @@ class ProcessRequestRequirementsAdapter(ProcessRequestRequirementsPort):
         self.conversation_history = {}
         self.conversation_id = None
         self.logger = logging.getLogger(__name__)
-        self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://localhost:7000/process-file')
+        self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://joyit-cn-ai-storage-text-extraction:7000/process-file')
         self.logger.info("ProcessUserStorydapter initialized")
 
     def _process_request_requirements(self, input_data, conversation_id, user_message, previous_messages):
