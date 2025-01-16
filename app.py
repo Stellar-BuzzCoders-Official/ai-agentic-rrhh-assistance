@@ -2,9 +2,8 @@ from flask import Flask, request, jsonify
 import ollama as ollama
 from flask_cors import CORS
 from src.adapters.input_adapters import APIController
-from src.services import TestCaseGeneratorService
-from src.adapters.output_adapters import ChromaRepository
-from src.adapters.output_adapters import OllamaRepository
+from src.services import TechnicalReportGeneratorService
+from src.adapters.output_adapters import OllamaRepository, AzureRepository, GeminiRepository
 from src.adapters.output_adapters import MongoDBRepository
 from src.adapters.tech_profile_adapters import ProcessRequestRequirementsAdapter
 from src.adapters.tech_profile_adapters import ProcessCvAdapter
@@ -14,6 +13,10 @@ from src.adapters.conversation_adapters.conversation_management_adapter import C
 import logging
 from src.adapters.tech_profile_adapters.count_tokens_adapter import CountTokensAdapter
 from pymongo.errors import PyMongoError
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -21,14 +24,30 @@ app.config['DEBUG'] = True
 logger = logging.getLogger(__name__)
 
 mongo_repo = MongoDBRepository()
-llm = OllamaRepository()
+
+FLAGGER_MODEL = os.getenv('FLAGGER_MODEL')
+
+# Instanciar el LLM basado en FLAGGER_MODEL
+if FLAGGER_MODEL == 'azureml':
+    llm = AzureRepository()
+    logger.info("Usando AzureML como proveedor de LLM.")
+elif FLAGGER_MODEL == 'ollama':
+    # Usar OllamaRepository
+    llm = OllamaRepository()
+    logger.info("Usando Ollama como proveedor de LLM.")
+elif FLAGGER_MODEL == 'geminilm':
+    llm = GeminiRepository()
+    logger.info("Usando GeminiLM como proveedor de LLM.")
+else:
+    raise ValueError(f"El modelo FLAGGER_MODEL '{FLAGGER_MODEL}' no es soportado.")
+
 count_tokens = CountTokensAdapter()
 conversation_manager = ConversationManagementAdapter(mongo_repo)
 name_history_generator = NameHistoryGeneratorAdapter(llm)
 prompt_generator = TestCasePromptGeneratorAdapter(llm)
 process_request_requirements = ProcessRequestRequirementsAdapter(llm, mongo_repo, name_history_generator, conversation_manager, count_tokens)
 process_request_cv = ProcessCvAdapter(llm, mongo_repo, prompt_generator, conversation_manager, count_tokens)
-test_case_generator_service = TestCaseGeneratorService(process_request_requirements, process_request_cv)
+test_case_generator_service = TechnicalReportGeneratorService(process_request_requirements, process_request_cv)
 api_controller = APIController(test_case_generator_service)
 
 @app.route('/')
@@ -93,7 +112,6 @@ def get_all_conversations(user_id):
         return jsonify({"conversations": conversations}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/api/v0/deleteConversation/<conversation_id>', methods=['DELETE'])
 def update_conversation_user_story(conversation_id):

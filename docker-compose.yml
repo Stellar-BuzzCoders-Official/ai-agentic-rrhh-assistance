@@ -26,6 +26,13 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD
       - MONGO_SERVER_port
       - MONGO_SERVER_HOST
+      - FLAGGER_MODEL
+      - AZURE_ENDPOINT
+      - AZURE_API_KEY
+      - AZURE_DEPLOYMENT
+      - GEMINI_API_KEY
+      - GEMINI_MODEL
+      - GEMINI_URL
     expose:
       - 5000
     

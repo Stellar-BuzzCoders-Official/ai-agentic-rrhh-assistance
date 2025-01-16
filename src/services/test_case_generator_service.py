@@ -7,7 +7,7 @@ from datetime import datetime
 import json
 import uuid
 
-class TestCaseGeneratorService:
+class TechnicalReportGeneratorService:
     def __init__(self, process_request_requirements: ProcessRequestRequirementsPort, process_request_cv: ProcessRequestCvPort):
         self.process_request_requirements = process_request_requirements
         self.process_request_cv = process_request_cv

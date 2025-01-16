@@ -25,7 +25,7 @@ class ChromaRepository(ChromaDbRepositoryPort):
         
         # Realiza una consulta a ChromaDB usando el conversation_id
         results = self.context_collection.query(
-            query_embeddings=[conversation_id],  # Debes ajustar esto según cómo guardes el ID
+            query_embeddings=[conversation_id],
             n_results=1
         )
         

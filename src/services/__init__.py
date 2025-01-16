@@ -1,2 +1,1 @@
-from .test_case_generator_service import TestCaseGeneratorService
-
+from .test_case_generator_service import TechnicalReportGeneratorService

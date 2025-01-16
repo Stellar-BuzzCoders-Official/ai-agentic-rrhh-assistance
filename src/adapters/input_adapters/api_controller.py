@@ -1,9 +1,9 @@
 from src.ports.input_ports import APIPort
-from src.services import TestCaseGeneratorService
+from src.services import TechnicalReportGeneratorService
 from src.domain.entities import UserStory
 
 class APIController(APIPort):
-    def __init__(self, test_case_generator_service: TestCaseGeneratorService):
+    def __init__(self, test_case_generator_service: TechnicalReportGeneratorService):
         self.test_case_generator_service = test_case_generator_service
     
     def generate_test_cases(self, user_story: UserStory) -> str:
