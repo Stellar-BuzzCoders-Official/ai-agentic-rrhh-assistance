@@ -57,7 +57,6 @@ def index():
 @app.route('/api/v0/screeningChat', methods=['POST'])
 def test_generate_cases():
     input_data = request.get_json()
-    app.logger.debug(f"Datos recibidos: {input_data}")
     try:
         app.logger.info("Iniciando la generación de casos de prueba.")
         response, status_code = api_controller.generate_test_cases(input_data)

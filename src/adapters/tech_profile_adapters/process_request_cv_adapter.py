@@ -29,7 +29,6 @@ class ProcessCvAdapter(ProcessRequestCvPort):
 
     def _process_request_cv(self, input_data, conversation_id,user_message, previous_messages):
         """Procesa una historia de usuario y genera casos de prueba."""
-        self.logger.info(f"Procesando historia de usuario con input_data: {input_data}")
         
         if not self.conversation_id:
             self.conversation_id = input_data['data'].get('conversation_id') or str(uuid.uuid4())
@@ -111,7 +110,7 @@ class ProcessCvAdapter(ProcessRequestCvPort):
 
         # Validar la historia de usuario
         is_valid_request_cv = self.validate_request_cv(request_cv or user_message)
-        self.logger.debug(f"Validez de la historia de usuario: {is_valid_request_cv}")
+        self.logger.debug(f"Validez del cv: {is_valid_request_cv}")
 
         new_messages = []
         try:
@@ -174,14 +173,29 @@ class ProcessCvAdapter(ProcessRequestCvPort):
                     self.logger.debug(f"Contenido de mensaje formateado: {message['content']}")
                 
         if process_phase == "upload_cv_and_match":
+            # Modifica la sección donde creas el validation_message
+
             if is_valid_request_cv:
-                technical_report = self.prompt_generator.prompt_generate_technical_report(capabilities,request_cv)
+                technical_report = self.prompt_generator.prompt_generate_technical_report(capabilities, request_cv)
+                
+                # Convierte technical_report a objeto JSON si viene como string
+                if isinstance(technical_report, str):
+                    try:
+                        # Si el string tiene comillas simples, reemplázalas por comillas dobles
+                        technical_report = technical_report.replace("'", '"')
+                        technical_report_json = json.loads(technical_report)
+                    except json.JSONDecodeError:
+                        self.logger.error(f"Error al convertir technical_report a JSON: {technical_report}")
+                        technical_report_json = {"error": "No se pudo procesar el informe técnico"}
+                else:
+                    technical_report_json = technical_report
+                
+                # Construir el mensaje con el informe técnico como parte del contenido
                 validation_message = {
                     "id": str(uuid.uuid4()),
                     "role": "assistant",
-                    "content": (
-                        f"¡Gracias por la información! A continuación, te presento el informe técnico en base al CV y los requerimientos técnicos: {technical_report}"
-                    ),
+                    "content": "¡Gracias por la información! A continuación, te presento el informe técnico en base al CV y los requerimientos técnicos:",
+                    "technical_report": technical_report_json,  # Añade el informe como un campo separado
                     "validate": True
                 }
             else:
@@ -270,55 +284,52 @@ class ProcessCvAdapter(ProcessRequestCvPort):
         self.conversation_history[self.conversation_id] = combined_messages
         self.conversation_manager.save_conversation(self.conversation_id, request_cv, name_history, is_valid_request_cv)
         
-        self.logger.info("Procesamiento de historia de usuario completado exitosamente.")
+        self.logger.info("Procesamiento de Screening completado.")
         
         return {"data": response_data}, 200
 
     def validate_request_cv(self, request_cv: str) -> bool:
-        self.logger.debug(f"Validando historia de usuario: {request_cv}")
+        self.logger.debug(f"Validando CV: {request_cv}")
         
         # Generar el prompt para la validación
         validation_prompt = self.prompt_validation_request_cv(request_cv)
-        self.logger.debug(f"Prompt de validación de historia de usuario: {validation_prompt}")
+        self.logger.debug(f"Prompt de validación de CV: {validation_prompt}")
         
         # Llamar a la generación de respuesta
         response_tuple = self.llm.generate_response(validation_prompt)
+        self.logger.debug(f"Respuesta del LLM: {response_tuple}")
         
-        # Asegurarse de que la respuesta sea una tupla y tenga contenido
+        # Asegurar que la respuesta sea de tipo string
         if isinstance(response_tuple, tuple) and len(response_tuple) > 0:
-            response = response_tuple[0]
+            response = str(response_tuple[0]).strip().lower()
         else:
-            response = str(response_tuple)
-
+            response = str(response_tuple).strip().lower()
+        
         self.logger.debug(f"Respuesta del LLM antes de limpieza: '{response}'")
         
-        cleaned_response = re.sub(r'[^a-zA-Z]', '', response.strip().lower())
-        
-        # Depuración: Mostrar la respuesta limpia
-        self.logger.debug(f"Respuesta limpia: '{cleaned_response}'")
-
-        if cleaned_response == 'true':
-            self.logger.debug("Validación exitosa: La respuesta es 'True'.")
+        # Verificar si la respuesta contiene exactamente "true" o "false"
+        # Usando expresiones regulares para buscar la palabra completa
+        if re.search(r'\btrue\b', response):
+            self.logger.debug("Validación exitosa: La respuesta contiene 'true'.")
             return True
-        elif cleaned_response == 'false':
-            self.logger.debug("Validación fallida: La respuesta es 'False'.")
+        elif re.search(r'\bfalse\b', response):
+            self.logger.debug("Validación fallida: La respuesta contiene 'false'.")
             return False
         else:
-
-            self.logger.warning(f"Respuesta inesperada: {cleaned_response}. Esperado 'True' o 'False'.")
-            return False
+            # Enfoque alternativo si no encuentra palabras exactas
+            if "true" in response and "false" not in response:
+                self.logger.debug("Validación exitosa: La respuesta contiene 'true' sin 'false'.")
+                return True
+            elif "false" in response:
+                self.logger.debug("Validación fallida: La respuesta contiene 'false'.")
+                return False
+            else:
+                self.logger.warning(f"Respuesta inesperada: {response}. Se esperaba 'true' o 'false'.")
+                return False
 
     def prompt_validation_request_cv(self, request_cv: str) -> str:
         return f"""
-        El CV debe ser claro, estructurado y contener información relevante para evaluar al candidato. 
-        Asegúrate de que incluya:
-        - Datos personales básicos (nombre, contacto, ubicación).
-        - Experiencia laboral relevante (puestos, empresas, fechas).
-        - Educación (títulos obtenidos, instituciones, años).
-        - Habilidades técnicas y certificaciones (lenguajes de programación, herramientas, etc.).
-
         CV actual: {request_cv}
-
-        ¿Este CV cumple con los criterios mencionados?
-        Responde únicamente con 'true' si cumple o 'false' si no cumple, sin ninguna explicación adicional.
+        ¿Cumple con los criterios básicos de un CV? 
+        Responde SOLAMENTE con la palabra 'true' o 'false' sin explicaciones adicionales.
         """
