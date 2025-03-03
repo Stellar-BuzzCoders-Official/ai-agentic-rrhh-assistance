@@ -27,7 +27,7 @@ class ProcessCvAdapter(ProcessRequestCvPort):
         self.logger = logging.getLogger(__name__)
         self.api_extractor_text_url = os.environ.get('API_TEXT_EXTRACT_BASE_URL', 'http://joyit-cn-ai-storage-text-extraction:7000/process-file')
 
-    def _process_request_cv(self, input_data, conversation_id,user_message, previous_messages):
+    def _process_request_cv(self, input_data, conversation_id, user_message, previous_messages):
         """Procesa una historia de usuario y genera casos de prueba."""
         
         if not self.conversation_id:
@@ -190,12 +190,59 @@ class ProcessCvAdapter(ProcessRequestCvPort):
                 else:
                     technical_report_json = technical_report
                 
+                # Calcular los valores para el resumen basados en el análisis del CV
+                # Extraer el número de requisitos indispensables cumplidos
+                cumple_indispensable = 0
+                cumple_deseable = 0
+                total_indispensable = 0
+                total_deseable = 0
+                
+                try:
+                    # Analizar el technical_report para extraer los cumplimientos
+                    if "technicalCapabilities" in technical_report_json:
+                        for category in technical_report_json["technicalCapabilities"]:
+                            if "skills" in category:
+                                for skill in category["skills"]:
+                                    if skill.get("type") == "Indispensable":
+                                        total_indispensable += 1
+                                        if skill.get("status") == "Cumple":
+                                            cumple_indispensable += 1
+                                    elif skill.get("type") == "Deseable":
+                                        total_deseable += 1
+                                        if skill.get("status") == "Cumple":
+                                            cumple_deseable += 1
+                    
+                    # Calcular el porcentaje de cumplimiento general
+                    total_requisitos = total_indispensable + total_deseable
+                    total_cumplidos = cumple_indispensable + cumple_deseable
+                    
+                    if total_requisitos > 0:
+                        porcentaje_cumplimiento = round((total_cumplidos / total_requisitos) * 100)
+                    else:
+                        porcentaje_cumplimiento = 0
+                    
+                    self.logger.debug(f"Análisis de requisitos: Indispensables {cumple_indispensable}/{total_indispensable}, Deseables {cumple_deseable}/{total_deseable}, Total: {porcentaje_cumplimiento}%")
+                
+                except Exception as e:
+                    self.logger.error(f"Error al calcular el resumen de requisitos: {str(e)}")
+                    # Valores por defecto en caso de error
+                    cumple_indispensable = 0
+                    cumple_deseable = 0
+                    porcentaje_cumplimiento = 0
+                
+                # Añadir el resumen al technical_report_json
+                technical_report_json["resumen"] = {
+                    "cumpleIndispensable": cumple_indispensable,
+                    "cumpleDeseable": cumple_deseable,
+                    "recomendation": f"Este candidato cumple en un {porcentaje_cumplimiento}% los requerimientos para el puesto"
+                }
+                
                 # Construir el mensaje con el informe técnico como parte del contenido
                 validation_message = {
                     "id": str(uuid.uuid4()),
                     "role": "assistant",
                     "content": "¡Gracias por la información! A continuación, te presento el informe técnico en base al CV y los requerimientos técnicos:",
-                    "technical_report": technical_report_json,  # Añade el informe como un campo separado
+                    "technical_report": technical_report_json,
                     "validate": True
                 }
             else:
