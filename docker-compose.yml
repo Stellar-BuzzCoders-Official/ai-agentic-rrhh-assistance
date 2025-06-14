@@ -33,6 +33,8 @@ services:
       - GEMINI_API_KEY
       - GEMINI_MODEL
       - GEMINI_URL
+      - MONGO_URI
+      - MONGO_DB_NAME
     expose:
       - 5000
     

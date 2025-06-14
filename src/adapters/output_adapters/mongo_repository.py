@@ -11,19 +11,14 @@ logger = logging.getLogger(__name__)
 
 class MongoDBRepository(MongoDBPort):
     def __init__(self):
-        mongo_user = os.getenv('MONGO_INITDB_ROOT_USERNAME', 'root')
-        mongo_password = os.getenv('MONGO_INITDB_ROOT_PASSWORD', 'rootpassword')
-        mongo_host = os.getenv('MONGO_SERVER_HOST', 'localhost')
-        mongo_port = os.getenv('MONGO_SERVER_PORT', '28018')
         self.logger = logging.getLogger(__name__)
         self.loggin = logging.getLogger(__name__)
         self.loggin.info("Conectando a MongoDB...")
-        self.loggin.info(f"Host: {mongo_host}, Port: {mongo_port}, User: {mongo_user}")
-        self.loggin.info(f"Password: {'*' * len(mongo_password)}")
-        
-        self.mongo_uri = f'mongodb://{mongo_user}:{mongo_password}@{mongo_host}:{mongo_port}/'
+        self.mongo_uri = os.getenv('MONGO_URI')
+        self.logger.info(f"URI de MongoDB: {self.mongo_uri}")
         self.client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=5000)
-        self.db = self.client['mongo_db']
+        mongo_db_name = os.getenv('MONGO_DB_NAME')
+        self.db = self.client[mongo_db_name]
         self.collection_conversation = self.db['conversations']
         self.logger.info("collection conversations creado")
         self.collection_user = self.db['users']
