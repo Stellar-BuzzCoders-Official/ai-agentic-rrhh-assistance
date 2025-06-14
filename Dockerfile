@@ -25,4 +25,4 @@ COPY src ./src
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 5000 --reload"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 5000 --reload"]
