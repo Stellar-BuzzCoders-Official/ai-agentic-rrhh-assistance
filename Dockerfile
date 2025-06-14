@@ -1,4 +1,4 @@
-FROM python:3.10-bookworm
+FROM python:3.11-bookworm
 
 WORKDIR /app
 
@@ -25,4 +25,4 @@ COPY src ./src
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "flask run --host=0.0.0.0 --port=5000"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 5000 --reload"]
