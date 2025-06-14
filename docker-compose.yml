@@ -1,6 +1,6 @@
 services:
-  joyit-cn-ai-chatbot-screening:
-    container_name: joyit-cn-ai-chatbot-screening
+  joyit-cn-ai-screening-chatbot:
+    container_name: joyit-cn-ai-screening-chatbot
     build: .
     ports:
       - "5000:5000"
