@@ -10,9 +10,11 @@ logger = logging.getLogger(__name__)
 
 class JWTAuthAdapter:
     def __init__(self):
-        self.secret_key = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+        self.secret_key = os.getenv('JWT_SECRET_KEY')
         self.algorithm = "HS256"
         self.access_token_expire_minutes = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES'))
+        logger.info("Inicializando JWTAuthAdapter con configuración de seguridad")
+        logger.info("access_token_expire_minutes: %d", self.access_token_expire_minutes)
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -41,6 +43,7 @@ class JWTAuthAdapter:
         try:
             encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
             logger.info(f"Token JWT creado exitosamente para usuario: {data.get('sub', 'unknown')}")
+            logger.debug(f"Token expira en: {expire} UTC")
             return encoded_jwt
         except Exception as e:
             logger.error(f"Error al crear token JWT: {str(e)}")
@@ -52,6 +55,7 @@ class JWTAuthAdapter:
     def verify_token(self, token: str) -> Dict[str, Any]:
         """Verifica y decodifica un token JWT"""
         try:
+            # jwt.decode() ya maneja automáticamente la verificación de expiración
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             user_id: str = payload.get("sub")
             
@@ -62,16 +66,11 @@ class JWTAuthAdapter:
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             
-            # Verificar si el token ha expirado
-            exp = payload.get("exp")
-            if exp and datetime.utcnow() > datetime.fromtimestamp(exp):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token expirado",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+            # REMOVIDO: La verificación manual redundante de expiración
+            # jwt.decode() ya se encarga de esto automáticamente
             
             logger.info(f"Token verificado exitosamente para usuario: {user_id}")
+            logger.debug(f"Token válido hasta: {datetime.fromtimestamp(payload.get('exp', 0))}")
             return payload
             
         except jwt.ExpiredSignatureError:
