@@ -1,28 +1,25 @@
-FROM python:3.11-bookworm
+FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y \
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Instalar utilitarios del sistema mínimos
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    gnupg2 \
-    lsb-release \
-    software-properties-common \
-    git \
-    procps && \
-    rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-RUN pip install nltk && \
-    python3 -c "import nltk; nltk.download('punkt_tab')"
-
-COPY ./doc_llama/ollama.py /usr/local/lib/python3.10/site-packages/langchain_community/embeddings/ollama.py
-
-COPY app.py .
+# Copiar aplicación
 COPY src ./src
+COPY app.py .
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 5000 --reload"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000"]
