@@ -113,9 +113,14 @@ source .venv/bin/activate  # En Windows: .\.venv\Scripts\Activate.ps1
 # 2. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Configurar variables de entorno
+### Configurar Recursos en la Nube (Azure)
+Para el aprovisionamiento paso a paso de Azure OpenAI, Cosmos DB NoSQL, Blob Storage, Document Intelligence y Microsoft Entra ID, consulta la guía detallada:
+👉 **[Manual de Configuración de Recursos en Azure](file:///c:/workspace-ia/dmc/Diploma%20-%20AI%20Engineer/proyecto%20integrador/joyit-cn-ai-rrhh-assistance/docs/MANUAL_CONFIGURACION_AZURE.md)**
+
+### Configurar Variables Locales
+```bash
 cp .env.example .env
-# Edita .env con tus credenciales de Azure
+# Edita .env con tus credenciales de Azure o utiliza los proveedores 'memory' / 'dev' para pruebas locales
 ```
 
 ### Ejecutar la Aplicación
