@@ -31,38 +31,37 @@ Este manual describe el paso a paso detallado para aprovisionar y configurar tod
 
 ---
 
-## 2. Azure OpenAI Service
+## 2. Microsoft AI Foundry (anteriormente Azure OpenAI / Azure AI Studio)
+
+Microsoft ha unificado Azure OpenAI y el catálogo de modelos en el portal **Microsoft Azure AI Foundry** (`https://ai.azure.com/`).
 
 El sistema utiliza modelos de lenguaje para el agente ReAct de reclutamiento, el sub-agente auditor de Grounding (Juez) y la generación de vectores para el Talent Pool.
 
-### Pasos de Configuración:
-1. En el [Azure Portal](https://portal.azure.com/), busca **Azure OpenAI** y pulsa **Crear**.
-2. Selecciona tu **Suscripción**, **Grupo de Recursos**, y una región con cuota disponible (ej. `East US` o `Sweden Central`).
-3. Asigna un nombre al recurso (ej: `aoai-rrhh-prod`).
-4. Selecciona el plan de tarifa **Standard S0** y pulsa **Revisar y crear**.
-5. Una vez creado, ve al recurso y abre el **Azure OpenAI Studio** (`https://oai.azure.com/`).
-6. En la pestaña **Deployments (Implementaciones)**, crea **dos implementaciones**:
+### Pasos de Configuración en Microsoft AI Foundry:
+1. Accede al portal de **Microsoft AI Foundry**: [https://ai.azure.com/](https://ai.azure.com/) o crea un recurso de tipo **Azure AI Foundry / Cognitive Services** en el [Azure Portal](https://portal.azure.com/).
+2. Crea un **Proyecto (Project)** dentro de tu Hub (ej. `dipaie-group1`).
+3. Ve a la sección **Models + endpoints (Modelos y puntos de conexión)** o **Deployments (Implementaciones)** y despliega **dos modelos**:
 
-#### Implementación 1: Modelo de Chat y Razonamiento
-* **Modelo**: `gpt-4o-mini`
-* **Versión del modelo**: `2024-07-18` (o la más reciente disponible)
-* **Nombre de la implementación (Deployment name)**: `gpt-4o-mini`
-* **Tipo de implementación**: Standard
-* **Límite de tokens por minuto (TPM)**: Recomendado 30K - 50K TPM.
+#### Implementación 1: Modelo de Chat y Razonamiento (`gpt-5-mini` o `gpt-4o-mini`)
+* **Modelo**: `gpt-5-mini` (o `gpt-4o-mini`)
+* **Nombre de la implementación (Deployment name)**: `gpt-5-mini`
+* **Tipo de implementación**: Standard / Global Standard
+* *Nota Técnica:* Los modelos de nueva generación/razonamiento como `gpt-5-mini` operan con `temperature=1.0`. El adaptador backend (`AzureOpenAIProvider`) ajusta automáticamente este parámetro para garantizar compatibilidad total con tool calling y structured outputs.
 
 #### Implementación 2: Modelo de Embeddings Vectoriales
 * **Modelo**: `text-embedding-3-small`
-* **Versión del modelo**: Default
 * **Nombre de la implementación (Deployment name)**: `text-embedding-3-small`
 * **Dimensiones vectoriales**: `1536`
 
 ### Claves y Endpoint a obtener:
-En el menú del recurso en Azure Portal -> **Keys and Endpoint**:
-* `AZURE_ENDPOINT`: `https://<tu-recurso-openai>.openai.azure.com/`
-* `AZURE_API_KEY`: Copia la `Key 1`.
-* `AZURE_DEPLOYMENT`: `gpt-4o-mini`
-* `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`: `text-embedding-3-small`
-* `AZURE_OPENAI_API_VERSION`: `2024-08-01-preview`
+En el portal de Azure o en Foundry (Overview -> Connected Resources / Endpoints):
+* **Endpoint compatible OpenAI**: Utiliza el formato de endpoint base del recurso:
+  `AZURE_ENDPOINT=https://<tu-recurso>.openai.azure.com/` (o `https://<tu-recurso>.services.ai.azure.com/`)
+  *(Evita incluir sufijos como `/api/projects/...`, ya que el SDK de OpenAI concatena automáticamente las rutas de API).*
+* **API Key**: Copia la clave de acceso del recurso conectado.
+* `AZURE_DEPLOYMENT=gpt-5-mini`
+* `AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small`
+* `AZURE_OPENAI_API_VERSION=2024-08-01-preview`
 
 ---
 
