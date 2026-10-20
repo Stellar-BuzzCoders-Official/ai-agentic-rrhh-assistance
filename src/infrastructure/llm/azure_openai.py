@@ -27,12 +27,16 @@ class AzureOpenAIProvider(ChatModelProviderPort, EmbeddingsProviderPort):
             logger.warning("Azure OpenAI endpoint o API key no están configurados todavía.")
 
     def get_chat_model(self, temperature: float = 0.0) -> BaseChatModel:
+        # Modelos de razonamiento y nueva generación (gpt-5-mini, o1, o3) solo soportan temperature=1.0
+        deployment_lower = (self.deployment or "").lower()
+        effective_temp = 1.0 if any(p in deployment_lower for p in ["gpt-5", "o1", "o3", "reasoning"]) else temperature
+
         return AzureChatOpenAI(
             azure_endpoint=self.endpoint,
             api_key=self.api_key,
             azure_deployment=self.deployment,
             api_version=self.api_version,
-            temperature=temperature,
+            temperature=effective_temp,
         )
 
     def get_embeddings(self) -> Embeddings:

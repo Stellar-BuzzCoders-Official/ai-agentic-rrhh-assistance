@@ -24,8 +24,12 @@ class CosmosCheckpointerProvider(CheckpointerProviderPort):
 
         try:
             from langchain_azure_cosmosdb import CosmosDBSaverSync
-            container = self.manager.get_container(settings.COSMOS_CHECKPOINTS_CONTAINER)
-            self._checkpointer = CosmosDBSaverSync(container=container)
+            self._checkpointer = CosmosDBSaverSync(
+                database_name=self.manager.database_name,
+                container_name=settings.COSMOS_CHECKPOINTS_CONTAINER,
+                endpoint=self.manager.endpoint,
+                key=self.manager.key,
+            )
             logger.info("CosmosDBSaverSync de LangGraph inicializado con éxito.")
             return self._checkpointer
         except Exception as e:

@@ -34,7 +34,7 @@ class AzureDocumentIntelligenceExtractor(DocumentExtractorPort):
             logger.info("Extrayendo texto con Azure Document Intelligence para: %s", file_name)
             poller = self.client.begin_analyze_document(
                 model_id="prebuilt-layout",
-                analyze_request=file_bytes,
+                body=io.BytesIO(file_bytes),
                 content_type="application/octet-stream",
                 output_content_format=DocumentContentFormat.MARKDOWN,
             )
