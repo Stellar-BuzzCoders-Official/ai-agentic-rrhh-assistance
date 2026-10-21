@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     # Dev token for local testing without Entra ID config
     DEV_AUTH_USER_ID: str = "a8f0569a-46fd-457f-847e-e233af403114"
-    DEV_AUTH_USER_EMAIL: str = "recruiter@joyit.ai"
+    DEV_AUTH_USER_EMAIL: str = "recruiter@rrhh.ai"
     DEV_AUTH_USER_NAME: str = "Recruiter Default"
 
 

@@ -1,4 +1,4 @@
-# JoyIt RRHH Assistance — Arquitectura Hexagonal con LangGraph y Azure
+# RRHH Screening Assistant — Arquitectura Hexagonal con LangGraph y Azure
 
 Sistema inteligente de asistencia y screening técnico de candidatos para RRHH, orquestado mediante **LangGraph**, con patrón **ReAct**, sub-agente auditor de **Grounding**, persistencia y búsqueda híbrida en **Azure Cosmos DB NoSQL**, extracción de documentos vía **Azure AI Document Intelligence**, y autenticación con **Microsoft Entra ID**.
 
@@ -115,7 +115,7 @@ pip install -r requirements.txt
 
 ### Configurar Recursos en la Nube (Azure)
 Para el aprovisionamiento paso a paso de Azure OpenAI, Cosmos DB NoSQL, Blob Storage, Document Intelligence y Microsoft Entra ID, consulta la guía detallada:
-👉 **[Manual de Configuración de Recursos en Azure](file:///c:/workspace-ia/dmc/Diploma%20-%20AI%20Engineer/proyecto%20integrador/joyit-cn-ai-rrhh-assistance/docs/MANUAL_CONFIGURACION_AZURE.md)**
+👉 **[Manual de Configuración de Recursos en Azure](docs/MANUAL_CONFIGURACION_AZURE.md)**
 
 ### Configurar Variables Locales
 ```bash

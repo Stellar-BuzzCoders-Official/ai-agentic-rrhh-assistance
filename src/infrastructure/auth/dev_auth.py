@@ -23,7 +23,7 @@ class DevTokenVerifier(TokenVerifierPort):
 
         return User(
             id=user_id,
-            email=f"{user_id}@joyit.ai",
+            email=f"{user_id}@rrhh.ai",
             name=f"User {user_id}",
             role="recruiter",
             isActive=True,

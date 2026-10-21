@@ -54,9 +54,9 @@ async def test_memory_repositories():
     assert user_threads[0].id == "th-1"
 
     # 3. Users
-    user = User(id=recruiter_id, email="recruiter@joyit.ai", name="Recruiter Test")
+    user = User(id=recruiter_id, email="recruiter@rrhh.ai", name="Recruiter Test")
     await user_repo.save_user(user)
-    found_user = await user_repo.get_user_by_email("recruiter@joyit.ai")
+    found_user = await user_repo.get_user_by_email("recruiter@rrhh.ai")
     assert found_user is not None
     assert found_user.id == recruiter_id
 

@@ -32,7 +32,7 @@ async def legacy_login(login_request: LoginRequest, container: Container = Depen
         "user": {
             "userID": user_id,
             "userName": login_request.username,
-            "email": f"{login_request.username}@joyit.ai",
+            "email": f"{login_request.username}@rrhh.ai",
         }
     }
 

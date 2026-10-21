@@ -267,7 +267,7 @@ flowchart LR
 
 ## 8. Matriz de Variables de Entorno (.env)
 
-Una vez que tengas los recursos creados, actualiza tu archivo `.env` en la raíz de `joyit-cn-ai-rrhh-assistance/`:
+Una vez que tengas los recursos creados, actualiza tu archivo `.env` en la raíz del proyecto backend:
 
 ```bash
 # ==============================================================================
@@ -320,7 +320,7 @@ ENTRA_CLIENT_ID=<client-id-de-rrhh-assistance-api>
 ENTRA_AUDIENCE=api://<client-id-de-rrhh-assistance-api>
 ```
 
-### Configuración del Frontend (`joyit-frontend-rrhh-assistance/src/environments/environment.ts`):
+### Configuración del Frontend (`src/environments/environment.ts`):
 ```typescript
 export const environment = {
   production: true,
