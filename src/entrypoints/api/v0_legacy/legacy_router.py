@@ -24,15 +24,18 @@ class LoginRequest(BaseModel):
 async def legacy_login(login_request: LoginRequest, container: Container = Depends(get_container)):
     """Endpoint legacy de login compatible con frontend v0."""
     logger.info("Login legacy solicitado para usuario: %s", login_request.username)
-    # Genera token de desarrollo compatible
-    user_id = "a8f0569a-46fd-457f-847e-e233af403114"
+    is_admin = "admin" in login_request.username.lower()
+    user_id = "admin-user" if is_admin else settings.DEV_AUTH_USER_ID
+    token = "dev-token-admin" if is_admin else "dev-token-legacy"
+
     return {
-        "access_token": "dev-token-legacy",
+        "access_token": token,
         "token_type": "bearer",
         "user": {
             "userID": user_id,
             "userName": login_request.username,
             "email": f"{login_request.username}@rrhh.ai",
+            "role": "admin" if is_admin else "recruiter",
         }
     }
 
