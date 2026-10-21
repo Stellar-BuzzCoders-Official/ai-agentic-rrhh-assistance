@@ -18,6 +18,20 @@ logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+# Silenciar tráfico verboso de SDKs de Azure y librerías HTTP en consola
+for noisy_logger in [
+    "azure",
+    "azure.core",
+    "azure.core.pipeline.policies.http_logging_policy",
+    "azure.cosmos",
+    "azure.cosmos._cosmos_http_logging_policy",
+    "azure.storage",
+    "urllib3",
+    "httpcore",
+    "httpx",
+]:
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
