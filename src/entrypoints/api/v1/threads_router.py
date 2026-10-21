@@ -52,7 +52,17 @@ async def get_thread_state(
 
     graph = build_screening_graph(container=container)
     config = {"configurable": {"thread_id": thread_id}}
-    state_tuple = graph.get_state(config)
+    
+    try:
+        state_tuple = await graph.aget_state(config)
+    except Exception as e:
+        logger.error("Error al obtener estado de LangGraph para el hilo %s: %s", thread_id, str(e))
+        return {
+            "thread": thread_meta.model_dump(),
+            "messages": [],
+            "technical_report": None,
+            "job_post": None,
+        }
 
     if not state_tuple or not state_tuple.values:
         return {"thread": thread_meta.model_dump(), "messages": []}
@@ -67,11 +77,17 @@ async def get_thread_state(
             "content": getattr(msg, "content", ""),
         })
 
+    report_val = state_tuple.values.get("technical_report")
+    report_data = report_val.model_dump(by_alias=True) if hasattr(report_val, "model_dump") else report_val
+
+    job_val = state_tuple.values.get("job_post")
+    job_data = job_val.model_dump(by_alias=True) if hasattr(job_val, "model_dump") else job_val
+
     return {
         "thread": thread_meta.model_dump(),
         "messages": formatted_messages,
-        "technical_report": state_tuple.values.get("technical_report"),
-        "job_post": state_tuple.values.get("job_post"),
+        "technical_report": report_data,
+        "job_post": job_data,
     }
 
 

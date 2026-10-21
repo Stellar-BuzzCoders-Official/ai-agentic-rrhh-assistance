@@ -25,6 +25,7 @@ class ChatRequestV1(BaseModel):
     thread_id: Optional[str] = Field(default=None, description="ID del hilo de conversación. Si no se envía, se genera uno nuevo.")
     message: str = Field(..., description="Texto del mensaje del reclutador")
     file_id: Optional[str] = Field(default=None, description="ID de un archivo previamente subido a /api/v1/files/upload")
+    file_ids: Optional[List[str]] = Field(default=None, description="Lista opcional de IDs de archivos subidos en lote (hasta 10)")
 
 
 @router.post("/stream")
@@ -49,14 +50,20 @@ async def chat_stream(
 
     # Preparar contenido
     user_text = request.message
-    if request.file_id:
+    primary_file_id = request.file_id
+    if request.file_ids:
+        if not primary_file_id and len(request.file_ids) > 0:
+            primary_file_id = request.file_ids[0]
+        for fid in request.file_ids:
+            user_text += f"\n[Archivo adjunto referenciado: {fid}]"
+    elif request.file_id:
         user_text += f"\n[Archivo adjunto referenciado: {request.file_id}]"
 
     initial_state = {
         "messages": [HumanMessage(content=user_text)],
         "user_id": current_user.id,
         "thread_id": thread_id,
-        "current_cv_id": request.file_id,
+        "current_cv_id": primary_file_id,
     }
 
     async def event_generator():
@@ -119,14 +126,20 @@ async def chat_sync(
     graph = build_screening_graph(container=container)
 
     user_text = request.message
-    if request.file_id:
+    primary_file_id = request.file_id
+    if request.file_ids:
+        if not primary_file_id and len(request.file_ids) > 0:
+            primary_file_id = request.file_ids[0]
+        for fid in request.file_ids:
+            user_text += f"\n[Archivo adjunto referenciado: {fid}]"
+    elif request.file_id:
         user_text += f"\n[Archivo adjunto referenciado: {request.file_id}]"
 
     initial_state = {
         "messages": [HumanMessage(content=user_text)],
         "user_id": current_user.id,
         "thread_id": thread_id,
-        "current_cv_id": request.file_id,
+        "current_cv_id": primary_file_id,
     }
 
     try:

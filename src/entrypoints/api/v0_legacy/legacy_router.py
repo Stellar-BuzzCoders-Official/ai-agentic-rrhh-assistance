@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 
 from src.entrypoints.api.dependencies import get_current_user, get_container
+from src.config.settings import settings
 from src.config.container import Container
 from src.domain.entities import User, Thread
 from src.application.agent.graph import build_screening_graph
@@ -141,7 +142,11 @@ async def get_conversation_by_id(
 
     graph = build_screening_graph(container=container)
     config = {"configurable": {"thread_id": conversation_id}}
-    state_tuple = graph.get_state(config)
+    try:
+        state_tuple = await graph.aget_state(config)
+    except Exception as e:
+        logger.error("Error al obtener estado legacy para %s: %s", conversation_id, str(e))
+        state_tuple = None
 
     messages = []
     if state_tuple and state_tuple.values:
@@ -186,7 +191,11 @@ async def get_capabilities(
     """Obtiene las capacidades técnicas configuradas en una conversación."""
     graph = build_screening_graph(container=container)
     config = {"configurable": {"thread_id": conversation_id}}
-    state_tuple = graph.get_state(config)
+    try:
+        state_tuple = await graph.aget_state(config)
+    except Exception as e:
+        logger.error("Error al obtener capacidades legacy para %s: %s", conversation_id, str(e))
+        state_tuple = None
 
     if not state_tuple or not state_tuple.values:
         raise HTTPException(status_code=404, detail="No se encontraron capacidades para la conversación")

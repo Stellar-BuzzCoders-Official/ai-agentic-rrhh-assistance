@@ -3,7 +3,7 @@
 Este manual describe el paso a paso detallado para aprovisionar y configurar todos los recursos en la nube de **Microsoft Azure** necesarios para el funcionamiento del backend (**LangGraph + Arquitectura Hexagonal**) y el frontend (**Angular + MSAL**) del sistema de reclutamiento y screening técnico.
 
 ---
-
+L
 ## 📋 Tabla de Contenido
 1. [Resumen de Recursos](#1-resumen-de-recursos)
 2. [Recurso 1: Microsoft AI Foundry (LLM & Embeddings)](#2-microsoft-ai-foundry-anteriormente-azure-openai--azure-ai-studio)
