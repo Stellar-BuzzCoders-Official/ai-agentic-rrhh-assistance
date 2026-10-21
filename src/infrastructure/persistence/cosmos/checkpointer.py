@@ -23,16 +23,20 @@ class CosmosCheckpointerProvider(CheckpointerProviderPort):
             return self._checkpointer
 
         try:
-            from langchain_azure_cosmosdb import CosmosDBSaverSync
-            self._checkpointer = CosmosDBSaverSync(
-                database_name=self.manager.database_name,
-                container_name=settings.COSMOS_CHECKPOINTS_CONTAINER,
-                endpoint=self.manager.endpoint,
-                key=self.manager.key,
+            from azure.cosmos.aio import CosmosClient as AsyncCosmosClient
+            from langchain_azure_cosmosdb import CosmosDBSaver
+
+            self._async_client = AsyncCosmosClient(
+                url=self.manager.endpoint,
+                credential=self.manager.key,
             )
-            logger.info("CosmosDBSaverSync de LangGraph inicializado con éxito.")
+            async_db = self._async_client.get_database_client(self.manager.database_name)
+            async_container = async_db.get_container_client(settings.COSMOS_CHECKPOINTS_CONTAINER)
+
+            self._checkpointer = CosmosDBSaver(container=async_container)
+            logger.info("CosmosDBSaver (asíncrono) de LangGraph inicializado con éxito.")
             return self._checkpointer
         except Exception as e:
-            logger.error("Error inicializando CosmosDBSaverSync: %s. Usando MemorySaver.", str(e))
+            logger.error("Error inicializando CosmosDBSaver: %s. Usando MemorySaver.", str(e))
             self._checkpointer = MemorySaver()
             return self._checkpointer
