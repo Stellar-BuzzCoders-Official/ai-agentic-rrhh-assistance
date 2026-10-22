@@ -4,6 +4,7 @@ from src.application.agent.state import RRHHState
 from src.application.agent.prompts import SYSTEM_JUDGE_PROMPT
 from src.config.container import Container
 from src.domain.entities import JudgeVerdict, TechnicalReport
+from src.domain.services.scoring import calculate_evaluation_summary
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,8 @@ async def judge_agent_node(state: RRHHState) -> dict:
     if not report:
         return {}
 
-    # Si ya fue aprobado, no volver a auditar
-    if state.get("grounding_verdict") and state["grounding_verdict"].approved:
+    # Si ya fue auditado, no volver a auditar
+    if state.get("grounding_verdict"):
         return {}
 
     container = Container.get_instance()
@@ -69,49 +70,43 @@ Dictamina si las afirmaciones y habilidades marcadas como 'Cumple' son veraces y
             HumanMessage(content=audit_prompt),
         ])
     except Exception as e:
-        logger.error("Error en la ejecución del sub-agente juez: %s. Aprobando por defecto con advertencia.", str(e))
+        logger.error(
+            "Error en la ejecución del sub-agente juez: %s. Aprobando por defecto con advertencia.", str(e))
         verdict = JudgeVerdict(
             approved=True,
             reasoning=f"Auditoría no completada por error técnico: {str(e)}",
             confidenceScore=0.5,
         )
 
-    current_retries = state.get("grounding_retries", 0)
-
     if verdict.approved:
         logger.info("✅ Veredicto del juez: APROBADO (Score: %.2f)", verdict.confidenceScore)
         report.isGrounded = True
+        report.requiresHumanReview = False
         report.judgeFeedback = "Aprobado por el sub-agente auditor de grounding."
-        return {
-            "grounding_verdict": verdict,
-            "technical_report": report,
-        }
     else:
         logger.warning("❌ Veredicto del juez: RECHAZADO. Discrepancias detectadas: %s", verdict.issues)
-        current_retries += 1
+        report.isGrounded = False
+        report.requiresHumanReview = True
+        report.judgeFeedback = "Discrepancias detectadas por el auditor de grounding: " + "; ".join(verdict.issues)
 
-        if current_retries < 2:
-            # Enviar mensaje al agente principal para corregir
-            feedback_msg = HumanMessage(
-                content=(
-                    f"⚠️ OBSERVACIÓN DEL SUB-AGENTE AUDITOR DE GROUNDING:\n"
-                    f"Se detectaron posibles discrepancias o falta de evidencia en el informe:\n"
-                    + "\n".join([f"- {iss}" for iss in verdict.issues])
-                    + "\nPor favor, ajusta las habilidades afectadas a 'No Cumple' o 'No Verificable' y regenera la evaluación con rigor estricto."
-                )
-            )
-            return {
-                "grounding_verdict": verdict,
-                "grounding_retries": current_retries,
-                "messages": [feedback_msg],
-            }
-        else:
-            # Se agotaron los reintentos: marcar informe como 'Requiere revisión humana'
-            report.isGrounded = False
-            report.requiresHumanReview = True
-            report.judgeFeedback = "Discrepancias no resueltas: " + "; ".join(verdict.issues)
-            return {
-                "grounding_verdict": verdict,
-                "grounding_retries": current_retries,
-                "technical_report": report,
-            }
+        # Ajustar de forma determinística en el informe las habilidades observadas por el juez
+        if verdict.issues:
+            issues_text = " ".join(verdict.issues).lower()
+            for cat in report.technicalCapabilities:
+                for skill in cat.skills:
+                    if skill.name.lower() in issues_text and skill.status == "Cumple":
+                        logger.info("Ajustando habilidad '%s' a 'No Cumple' tras dictamen del juez.", skill.name)
+                        skill.status = "No Cumple"
+                        skill.evidence = "Observación de auditoría: no fundamentado fehacientemente en el CV."
+
+            # Recalcular métricas determinísticas
+            report.evaluationSummary = calculate_evaluation_summary(report.technicalCapabilities)
+            if hasattr(report, "resumen") and report.resumen:
+                report.resumen["cumpleIndispensable"] = report.evaluationSummary.requiredSkillsMet
+                report.resumen["cumpleDeseable"] = report.evaluationSummary.optionalSkillsMet
+                report.resumen["recomendation"] = report.evaluationSummary.recommendation
+
+    return {
+        "grounding_verdict": verdict,
+        "technical_report": report,
+    }

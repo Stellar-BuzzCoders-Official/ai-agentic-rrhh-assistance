@@ -197,7 +197,7 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         # Si hay un reporte técnico recién generado que aún no ha sido auditado por el juez
         report = state.get("technical_report")
         verdict = state.get("grounding_verdict")
-        if report and (not verdict or (not verdict.approved and state.get("grounding_retries", 0) < 2)):
+        if report and not verdict:
             return "judge_agent"
 
         return "finalize"
@@ -209,20 +209,7 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
     )
 
     builder.add_edge("tools", "recruiter_agent")
-
-    def route_after_judge(state: RRHHState) -> str:
-        verdict = state.get("grounding_verdict")
-        retries = state.get("grounding_retries", 0)
-        # Si fue rechazado y no se han agotado los reintentos, regresa al agente para corregir
-        if verdict and not verdict.approved and retries < 2:
-            return "recruiter_agent"
-        return "finalize"
-
-    builder.add_conditional_edges(
-        "judge_agent",
-        route_after_judge,
-        {"recruiter_agent": "recruiter_agent", "finalize": "finalize"}
-    )
+    builder.add_edge("judge_agent", "finalize")
 
     builder.add_edge("finalize", END)
 
