@@ -1,8 +1,8 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, BaseMessage
 
 from src.application.agent.state import RRHHState
 from src.application.agent.prompts import SYSTEM_RECRUITER_PROMPT
@@ -13,6 +13,95 @@ from src.application.agent.nodes.finalize import finalize_node, safe_reply_node
 from src.config.container import Container
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_message_history(messages: List[Any]) -> List[BaseMessage]:
+    """
+    Garantiza que la secuencia de mensajes cumpla con el contrato estricto de OpenAI/Azure OpenAI:
+    1. Todo AIMessage con 'tool_calls' debe estar seguido INMEDIATAMENTE por ToolMessages
+       que respondan a cada 'tool_call_id'.
+    2. Si por una interrupción, caída del servidor o reinicio faltan ToolMessages, se sintetizan
+       mensajes de error para cada tool_call_id faltante, evitando que Azure OpenAI lance 400 Bad Request.
+    3. Ningún ToolMessage puede existir sin un AIMessage previo que haya declarado su tool_call_id.
+    4. Los AIMessages sin tool_calls y con contenido vacío reciben un texto por defecto.
+    """
+    if not messages:
+        return []
+
+    sanitized: List[BaseMessage] = []
+    i = 0
+    n = len(messages)
+
+    while i < n:
+        msg = messages[i]
+        is_ai = isinstance(msg, AIMessage) or getattr(msg, "type", None) == "ai"
+        tool_calls = getattr(msg, "tool_calls", None) if is_ai else None
+
+        if is_ai and tool_calls:
+            # 1. Agregar el AIMessage original
+            sanitized.append(msg)
+
+            # 2. Recolectar tool_call_ids esperados
+            expected_calls = []
+            expected_ids = set()
+            for tc in tool_calls:
+                call_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                call_name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "tool")
+                if call_id:
+                    expected_calls.append((call_id, call_name))
+                    expected_ids.add(call_id)
+
+            # 3. Buscar los ToolMessages consecutivos inmediatos
+            j = i + 1
+            existing_tool_msgs: Dict[str, Any] = {}
+            while j < n:
+                next_msg = messages[j]
+                is_tool = isinstance(next_msg, ToolMessage) or getattr(next_msg, "type", None) == "tool"
+                if not is_tool:
+                    break
+                tid = getattr(next_msg, "tool_call_id", None)
+                if tid and tid in expected_ids:
+                    existing_tool_msgs[tid] = next_msg
+                j += 1
+
+            # 4. Para cada call_id esperado, agregar el ToolMessage existente o sintetizar uno de fallo
+            for call_id, call_name in expected_calls:
+                if call_id in existing_tool_msgs:
+                    sanitized.append(existing_tool_msgs[call_id])
+                else:
+                    logger.warning(
+                        "Sintetizando ToolMessage para tool_call_id huérfano '%s' (%s) tras fallo/reinicio previo.",
+                        call_id,
+                        call_name,
+                    )
+                    sanitized.append(
+                        ToolMessage(
+                            content=f"Error o interrupción: la herramienta '{call_name}' no completó su ejecución previa debido a un fallo técnico o reinicio del servicio.",
+                            name=call_name,
+                            tool_call_id=call_id,
+                        )
+                    )
+
+            # Avanzar el índice saltando los ToolMessages ya procesados
+            i = j
+            continue
+
+        elif isinstance(msg, ToolMessage) or getattr(msg, "type", None) == "tool":
+            # ToolMessage huérfano (no precedido por un AIMessage con este tool_call_id)
+            tid = getattr(msg, "tool_call_id", None)
+            logger.warning("Descartando ToolMessage huérfano sin AIMessage previo: tool_call_id=%s", tid)
+            i += 1
+            continue
+
+        else:
+            # Mensaje estándar (HumanMessage, SystemMessage o AIMessage sin tool_calls)
+            if is_ai and not getattr(msg, "content", None):
+                # OpenAI rechaza AIMessage con content vacío y sin tool_calls
+                msg = AIMessage(content="[Respuesta previa vacía]", id=getattr(msg, "id", None))
+            sanitized.append(msg)
+            i += 1
+
+    return sanitized
 
 
 def build_screening_graph(container: Container | None = None, checkpointer=None):
@@ -45,8 +134,9 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         llm_with_tools = llm.bind_tools(tools)
 
         messages = state.get("messages", [])
+        sanitized_messages = sanitize_message_history(messages)
         system_msg = SystemMessage(content=SYSTEM_RECRUITER_PROMPT)
-        full_messages = [system_msg] + messages
+        full_messages = [system_msg] + sanitized_messages
 
         response = await llm_with_tools.ainvoke(full_messages)
 
