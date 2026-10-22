@@ -130,10 +130,22 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         if state.get("job_post"):
             context["job_post"] = state["job_post"]
 
+        messages = state.get("messages", [])
+
+        # Vía Rápida: Si la tool que acaba de ejecutarse es 'set_job_requirements',
+        # el mensaje de confirmación detallado ya fue generado con exactitud por la tool.
+        # Retornar directamente como AIMessage sin incurrir en una segunda llamada de 4-5s a Azure OpenAI.
+        if messages and (isinstance(messages[-1], ToolMessage) or getattr(messages[-1], "type", None) == "tool") and getattr(messages[-1], "name", None) == "set_job_requirements":
+            logger.info("⚡ Vía Rápida: retornando confirmación de requerimientos sin llamada adicional al LLM.")
+            response = AIMessage(content=str(messages[-1].content))
+            result = {"messages": [response]}
+            if "job_post" in context:
+                result["job_post"] = context["job_post"]
+            return result
+
         llm = container.llm_provider.get_chat_model(temperature=0.0)
         llm_with_tools = llm.bind_tools(tools)
 
-        messages = state.get("messages", [])
         sanitized_messages = sanitize_message_history(messages)
         system_msg = SystemMessage(content=SYSTEM_RECRUITER_PROMPT)
         full_messages = [system_msg] + sanitized_messages
