@@ -33,7 +33,7 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
     tool_node = ToolNode(tools)
 
     # 1. Nodo agente principal (ReAct)
-    def recruiter_agent_node(state: RRHHState) -> dict:
+    async def recruiter_agent_node(state: RRHHState) -> dict:
         user_id = state.get("user_id", "recruiter_default")
         thread_id = state.get("thread_id", "default_thread")
         context["user_id"] = user_id
@@ -48,7 +48,7 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         system_msg = SystemMessage(content=SYSTEM_RECRUITER_PROMPT)
         full_messages = [system_msg] + messages
 
-        response = llm_with_tools.invoke(full_messages)
+        response = await llm_with_tools.ainvoke(full_messages)
 
         result = {"messages": [response]}
         # Sincronizar objetos actualizados por las tools al estado de LangGraph

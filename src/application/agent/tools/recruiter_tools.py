@@ -64,7 +64,7 @@ def create_recruiter_tools(container: Container, context: Dict[str, Any]):
     user_id = context.get("user_id", "default_recruiter")
 
     @tool
-    def set_job_requirements(requirements_text: str) -> str:
+    async def set_job_requirements(requirements_text: str) -> str:
         """
         Extrae y registra los requerimientos técnicos de un puesto laboral.
         Úsalo cuando el reclutador proporcione o describa el perfil requerido.
@@ -79,7 +79,7 @@ Requerimientos:
 """
         structured_llm = llm.with_structured_output(ParsedRequirementsResponse)
         try:
-            parsed = structured_llm.invoke(prompt)
+            parsed = await structured_llm.ainvoke(prompt)
         except Exception as e:
             logger.warning("Fallo en structured output para requerimientos: %s. Creando fallback.", str(e))
             parsed = ParsedRequirementsResponse(
@@ -109,7 +109,7 @@ Requerimientos:
         )
 
     @tool
-    def evaluate_cv(file_id: str) -> str:
+    async def evaluate_cv(file_id: str) -> str:
         """
         Evalúa un CV adjunto (identificado por su file_id) frente a los requerimientos técnicos del puesto actual.
         Genera el informe técnico, calcula métricas de cumplimiento, indexa el candidato en el pool del reclutador
@@ -117,20 +117,8 @@ Requerimientos:
         """
         logger.info("Ejecutando tool evaluate_cv con file_id: %s", file_id)
 
-        # 1. Recuperar archivo y texto
-        import asyncio
-        loop = asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None
-
-        # Para invocar repos async desde tool síncrona
-        async def _get_file():
-            return await container.file_repo.get_file_metadata(file_id)
-
-        if loop and loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            file_meta = loop.run_until_complete(_get_file())
-        else:
-            file_meta = asyncio.run(_get_file())
+        # 1. Recuperar archivo y texto de forma puramente asíncrona
+        file_meta = await container.file_repo.get_file_metadata(file_id)
 
         if not file_meta or not file_meta.extractedText:
             return f"❌ No se encontró texto para el archivo con ID {file_id}. Asegúrate de que haya sido subido previamente."
@@ -159,7 +147,7 @@ Texto del CV:
 """
         structured_llm = llm.with_structured_output(CandidateExtractionResponse)
         try:
-            extraction = structured_llm.invoke(prompt)
+            extraction = await structured_llm.ainvoke(prompt)
         except Exception as e:
             logger.error("Error en structured output de CV: %s", str(e))
             # Fallback simple
@@ -205,7 +193,11 @@ Texto del CV:
         candidate_embedding = None
         try:
             embed_text = f"{extraction.candidateName} - {extraction.position}. Skills: {', '.join(extraction.skillsIdentified)}. {extraction.summary}"
-            candidate_embedding = container.embeddings_provider.get_embeddings().embed_query(embed_text)
+            embeddings_client = container.embeddings_provider.get_embeddings()
+            if hasattr(embeddings_client, "aembed_query"):
+                candidate_embedding = await embeddings_client.aembed_query(embed_text)
+            else:
+                candidate_embedding = embeddings_client.embed_query(embed_text)
         except Exception as e_emb:
             logger.warning("No se pudo generar embedding para el candidato: %s", str(e_emb))
 
@@ -219,22 +211,15 @@ Texto del CV:
             embedding=candidate_embedding,
         )
 
-        async def _save_and_search_pool():
-            await container.candidate_repo.save_candidate(candidate_profile)
-            # Buscar otros candidatos relevantes en el pool histórico para este puesto
-            matches = await container.candidate_repo.search_candidates(
-                recruiter_id=user_id,
-                query_text=job_reqs_text,
-                query_embedding=candidate_embedding,
-                limit=3,
-            )
-            # Excluir al mismo candidato recién subido
-            return [m for m in matches if m.candidateId != candidate_profile.id]
-
-        if loop and loop.is_running():
-            relevant_pool_matches = loop.run_until_complete(_save_and_search_pool())
-        else:
-            relevant_pool_matches = asyncio.run(_save_and_search_pool())
+        await container.candidate_repo.save_candidate(candidate_profile)
+        # Buscar otros candidatos relevantes en el pool histórico para este puesto
+        matches = await container.candidate_repo.search_candidates(
+            recruiter_id=user_id,
+            query_text=job_reqs_text,
+            query_embedding=candidate_embedding,
+            limit=3,
+        )
+        relevant_pool_matches = [m for m in matches if m.candidateId != candidate_profile.id]
 
         # 5. Construir TechnicalReport
         resumen_compat = {
@@ -276,33 +261,29 @@ Texto del CV:
         return report_preview
 
     @tool
-    def search_talent_pool(query: str, limit: int = 5) -> str:
+    async def search_talent_pool(query: str, limit: int = 5) -> str:
         """
         Busca candidatos existentes en el Talent Pool histórico del reclutador
         mediante búsqueda híbrida vectorial y textual.
         """
         logger.info("Ejecutando tool search_talent_pool para query: '%s'", query)
-        import asyncio
-        loop = asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None
 
         query_emb = None
         try:
-            query_emb = container.embeddings_provider.get_embeddings().embed_query(query)
+            embeddings_client = container.embeddings_provider.get_embeddings()
+            if hasattr(embeddings_client, "aembed_query"):
+                query_emb = await embeddings_client.aembed_query(query)
+            else:
+                query_emb = embeddings_client.embed_query(query)
         except Exception as e_emb:
             logger.warning("No se pudo generar embedding de búsqueda: %s", str(e_emb))
 
-        async def _search():
-            return await container.candidate_repo.search_candidates(
-                recruiter_id=user_id,
-                query_text=query,
-                query_embedding=query_emb,
-                limit=limit,
-            )
-
-        if loop and loop.is_running():
-            matches = loop.run_until_complete(_search())
-        else:
-            matches = asyncio.run(_search())
+        matches = await container.candidate_repo.search_candidates(
+            recruiter_id=user_id,
+            query_text=query,
+            query_embedding=query_emb,
+            limit=limit,
+        )
 
         if not matches:
             return "No se encontraron candidatos afines en el Talent Pool para los criterios indicados."
@@ -313,7 +294,7 @@ Texto del CV:
         return res
 
     @tool
-    def get_job_requirements() -> str:
+    async def get_job_requirements() -> str:
         """
         Consulta los requerimientos técnicos y capacidades del puesto definidos en la conversación actual.
         """

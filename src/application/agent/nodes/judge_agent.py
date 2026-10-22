@@ -64,7 +64,7 @@ Dictamina si las afirmaciones y habilidades marcadas como 'Cumple' son veraces y
 
     structured_judge = judge_llm.with_structured_output(JudgeVerdict)
     try:
-        verdict: JudgeVerdict = structured_judge.invoke([
+        verdict: JudgeVerdict = await structured_judge.ainvoke([
             SystemMessage(content=SYSTEM_JUDGE_PROMPT),
             HumanMessage(content=audit_prompt),
         ])
