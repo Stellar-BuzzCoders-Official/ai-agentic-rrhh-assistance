@@ -17,6 +17,8 @@ class CosmosUserRepository(UserRepositoryPort):
         container = self.manager.get_container(self.container_name)
         doc = user.model_dump(by_alias=True)
         doc["id"] = user.id
+        if doc.get("ttl") is None:
+            doc.pop("ttl", None)
         container.upsert_item(doc)
         return user
 

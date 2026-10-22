@@ -18,6 +18,8 @@ class CosmosThreadRepository(ThreadRepositoryPort):
         doc = thread.model_dump(by_alias=True)
         doc["id"] = thread.id
         doc["userId"] = thread.userId
+        if doc.get("ttl") is None:
+            doc.pop("ttl", None)
         container.upsert_item(doc)
         return thread
 

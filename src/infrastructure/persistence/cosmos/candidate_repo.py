@@ -20,6 +20,9 @@ class CosmosCandidateRepository(CandidateRepositoryPort):
         # Cosmos requiere id único como string
         doc["id"] = candidate.id
         doc["recruiterId"] = candidate.recruiterId
+        # Cosmos DB rechaza estrictamente 'ttl': null. Si no se especifica un ttl entero o -1, se remueve.
+        if doc.get("ttl") is None:
+            doc.pop("ttl", None)
         container.upsert_item(doc)
         logger.info("Candidato guardado en Cosmos DB: %s (recruiterId: %s)", candidate.personalInfo.name, candidate.recruiterId)
         return candidate

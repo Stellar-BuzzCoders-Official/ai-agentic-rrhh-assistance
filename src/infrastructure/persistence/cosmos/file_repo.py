@@ -18,6 +18,8 @@ class CosmosFileRepository(FileRepositoryPort):
         doc = metadata.model_dump(by_alias=True)
         doc["id"] = metadata.id
         doc["ownerId"] = metadata.ownerId
+        if doc.get("ttl") is None:
+            doc.pop("ttl", None)
         container.upsert_item(doc)
         return metadata
 
