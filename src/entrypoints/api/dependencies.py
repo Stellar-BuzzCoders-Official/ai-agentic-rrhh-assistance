@@ -21,9 +21,9 @@ async def get_current_user(
     Garantiza que el usuario exista en el repositorio de usuarios (auto-alta).
     """
     if not credentials or not credentials.credentials:
-        # En modo DEV permitimos fallback al usuario mock si no hay auth header
+        # En modo DEV o HYBRID permitimos fallback al usuario mock si no hay auth header
         from src.config.settings import settings
-        if settings.AUTH_PROVIDER == "dev":
+        if settings.AUTH_PROVIDER in ("dev", "hybrid"):
             user = await container.token_verifier.verify_token("dev-token")
             await container.user_repo.save_user(user)
             return user

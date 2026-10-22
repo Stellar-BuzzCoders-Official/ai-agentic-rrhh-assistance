@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     PERSISTENCE_PROVIDER: Literal["cosmos", "memory"] = "cosmos"
     EXTRACTOR_PROVIDER: Literal["document_intelligence", "legacy_local"] = "document_intelligence"
     SAFETY_PROVIDER: Literal["azure", "noop"] = "noop"
-    AUTH_PROVIDER: Literal["entra_id", "dev"] = "dev"
+    AUTH_PROVIDER: Literal["entra_id", "dev", "hybrid"] = "hybrid"
 
     # Talent pool & bulk upload limits
     BULK_UPLOAD_MAX_FILES: int = 10
@@ -82,9 +82,9 @@ class Settings(BaseSettings):
     CONTENT_SAFETY_KEY: Optional[str] = None
 
     # Microsoft Entra ID
-    ENTRA_TENANT_ID: Optional[str] = None
-    ENTRA_CLIENT_ID: Optional[str] = None
-    ENTRA_AUDIENCE: Optional[str] = None
+    ENTRA_TENANT_ID: Optional[str] = "0ceb204d-9306-498e-90d5-e8bdee8f5d58"
+    ENTRA_CLIENT_ID: Optional[str] = "9805b3f2-4ecf-4d71-bfa6-29df91b721c8"
+    ENTRA_AUDIENCE: Optional[str] = "api://9805b3f2-4ecf-4d71-bfa6-29df91b721c8"
 
     # Dev token for local testing without Entra ID config
     DEV_AUTH_USER_ID: str = "a8f0569a-46fd-457f-847e-e233af403114"

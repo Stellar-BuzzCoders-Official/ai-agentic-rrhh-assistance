@@ -1,4 +1,5 @@
 import logging
+from typing import Tuple
 from src.config.settings import settings
 from src.application.ports.outbound import (
     ChatModelProviderPort,
@@ -112,15 +113,30 @@ class Container:
             self.checkpointer_provider = MemoryCheckpointerProvider()
 
         # 5. Seguridad & Guardrails
+        from src.infrastructure.safety.prompt_guardrail import PromptInjectionGuardrail
+        prompt_guardrail = PromptInjectionGuardrail()
+
         if settings.SAFETY_PROVIDER == "azure":
             from src.infrastructure.safety.azure_safety import AzureContentSafetyAdapter
-            self.content_safety: ContentSafetyPort = AzureContentSafetyAdapter()
-        else:
+            azure_safety = AzureContentSafetyAdapter()
+
+            class CompositeSafetyAdapter(ContentSafetyPort):
+                async def check_input(self, text: str) -> Tuple[bool, str]:
+                    safe, reason = await prompt_guardrail.check_input(text)
+                    if not safe:
+                        return False, reason
+                    return await azure_safety.check_input(text)
+
+            self.content_safety: ContentSafetyPort = CompositeSafetyAdapter()
+        elif settings.SAFETY_PROVIDER == "strict_noop_for_unit_tests":
             from src.infrastructure.safety.noop_safety import NoopContentSafetyAdapter
             self.content_safety = NoopContentSafetyAdapter()
+        else:
+            # Por defecto activo en desarrollo y producción
+            self.content_safety = prompt_guardrail
 
         # 6. Autenticación
-        if settings.AUTH_PROVIDER == "entra_id":
+        if settings.AUTH_PROVIDER in ("entra_id", "hybrid"):
             from src.infrastructure.auth.entra_id import EntraIDTokenVerifier
             self.token_verifier: TokenVerifierPort = EntraIDTokenVerifier()
         else:

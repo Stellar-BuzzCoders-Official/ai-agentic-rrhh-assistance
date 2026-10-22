@@ -38,7 +38,7 @@ class EvaluatedSkillItem(BaseModel):
     name: str
     type: str = "Indispensable"
     level: str = "Conocimiento"
-    status: str = Field(default="Cumple", description="'Cumple', 'No Cumple' o 'No Verificable'")
+    status: str = Field(default="Cumple", description="'Cumple' o 'No Cumple'")
     evidence: str = Field(default="", description="Fragmento textual del CV que evidencia el estatus")
 
 
@@ -164,7 +164,7 @@ Requerimientos:
         # 2. Extracción y evaluación mediante LLM estructurado
         llm = container.llm_provider.get_chat_model(temperature=0.0)
         prompt = f"""Evalúa minuciosamente el siguiente CV frente a los requerimientos del puesto.
-Para cada habilidad requerida, determina si 'Cumple', 'No Cumple' o es 'No Verificable', y OBLIGATORIAMENTE cita el fragmento exacto del CV como evidencia.
+Para cada habilidad requerida, determina de forma binaria si 'Cumple' o 'No Cumple'. Si el candidato no demuestra fehacientemente la habilidad o no aparece en el CV, márcala como 'No Cumple' y cita 'No mencionado en el CV'. OBLIGATORIAMENTE cita el fragmento exacto del CV como evidencia cuando cumpla.
 
 Requerimientos del puesto:
 {job_reqs_text}
@@ -201,7 +201,7 @@ Texto del CV:
                     name=s.name,
                     type=s.type if s.type in ["Indispensable", "Deseable"] else "Indispensable",
                     level=s.level,
-                    status=s.status if s.status in ["Cumple", "No Cumple", "No Verificable"] else "Cumple",
+                    status="Cumple" if str(s.status).strip().lower() == "cumple" else "No Cumple",
                     evidence=s.evidence or "Detectado en CV",
                 )
                 for s in cat.skills
@@ -269,19 +269,13 @@ Texto del CV:
         context["current_cv_id"] = file_id
         context["current_cv_text"] = cv_text
 
-        # Resumen legible para la respuesta del agente
+        # Resumen conciso para la respuesta del agente (evita duplicar el marco de cumplimiento visual)
         report_preview = (
-            f"📊 **Informe Técnico de Evaluación**:\n"
-            f"- **Candidato:** {personal_info.name} ({personal_info.position})\n"
-            f"- **Años de Experiencia:** {personal_info.experienceYears}\n"
-            f"- **Cumplimiento Indispensables:** {scoring_summary.requiredSkillsMet}/{scoring_summary.totalRequiredSkills}\n"
-            f"- **Cumplimiento Deseables:** {scoring_summary.optionalSkillsMet}/{scoring_summary.totalOptionalSkills}\n"
-            f"- **Porcentaje Total:** {scoring_summary.matchPercentage}%\n"
-            f"- **Recomendación:** {scoring_summary.recommendation}\n"
+            f"Evaluación técnica finalizada para **{personal_info.name}** frente al perfil de **{job_post.title if job_post else personal_info.position}**."
         )
 
         if relevant_pool_matches:
-            report_preview += "\n🔍 **Perfiles relevantes identificados en tu Talent Pool histórico**:\n"
+            report_preview += "\n\n🔍 **Perfiles afines en tu Talent Pool histórico**:\n"
             for m in relevant_pool_matches:
                 report_preview += f"- **{m.name}** ({m.position}, {m.experienceYears} años) - Habilidades afines: {', '.join(m.matchedSkills[:4])}\n"
 

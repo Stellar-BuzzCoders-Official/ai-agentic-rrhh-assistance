@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 import uuid
 
 CapabilityType = Literal["Indispensable", "Deseable"]
-SkillStatus = Literal["Cumple", "No Cumple", "No Verificable"]
+SkillStatus = Literal["Cumple", "No Cumple"]
 
 
 class SkillEvaluation(BaseModel):
     name: str = Field(..., description="Nombre de la tecnología o habilidad técnica")
     type: CapabilityType = Field(default="Indispensable", description="Indispensable o Deseable")
     level: str = Field(default="Conocimiento", description="Nivel esperado o detectado (Básico, Intermedio, Avanzado, Conocimiento)")
-    status: SkillStatus = Field(default="Cumple", description="Cumple, No Cumple o No Verificable")
+    status: SkillStatus = Field(default="Cumple", description="Cumple o No Cumple")
     evidence: Optional[str] = Field(default=None, description="Cita textual o extracto del CV que justifica el estado")
 
 
