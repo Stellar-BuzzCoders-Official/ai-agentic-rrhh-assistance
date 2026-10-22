@@ -64,46 +64,73 @@ def create_recruiter_tools(container: Container, context: Dict[str, Any]):
     user_id = context.get("user_id", "default_recruiter")
 
     @tool
-    async def set_job_requirements(requirements_text: str) -> str:
+    async def set_job_requirements(
+        title: str = "Puesto Técnico",
+        description: str = "",
+        capabilities: Optional[List[ParsedCapabilityItem]] = None,
+        requirements_text: Optional[str] = None,
+    ) -> str:
         """
-        Extrae y registra los requerimientos técnicos de un puesto laboral.
-        Úsalo cuando el reclutador proporcione o describa el perfil requerido.
+        Registra y estructura las competencias técnicas indispensables y deseables del puesto.
+        Extrae del mensaje del reclutador:
+        - title: Título del puesto (ej: 'Senior Data Engineer')
+        - description: Resumen o descripción del puesto
+        - capabilities: Lista de competencias requeridas indicando:
+            * category: 'data', 'cloud', 'backend', 'devops', etc.
+            * name: nombre de la tecnología o habilidad
+            * type: 'Indispensable' o 'Deseable'
+            * level: 'Básico', 'Intermedio' o 'Avanzado'
+        - requirements_text: Texto original de los requerimientos (opcional)
         """
         logger.info("Ejecutando tool set_job_requirements...")
-        llm = container.llm_provider.get_chat_model(temperature=0.0)
 
-        prompt = f"""Extrae del siguiente texto los requerimientos del puesto técnico.
+        # Vía Rápida (Zero-Latency): Si el LLM ya estructuró las capacidades directamente en los argumentos del tool call
+        if capabilities and len(capabilities) > 0:
+            logger.info("✅ Procesando %d requerimientos estructurados directamente desde tool call (0 llamadas LLM adicionales).", len(capabilities))
+            parsed_title = title or "Puesto Técnico"
+            parsed_description = description or ""
+            parsed_capabilities = capabilities
+            raw_content = requirements_text or f"{parsed_title}: {parsed_description}\n" + "\n".join([f"- {c.name} ({c.type})" for c in capabilities])
+        else:
+            # Vía Fallback: Si el LLM solo envió un string plano en requirements_text
+            logger.info("Extrayendo requerimientos vía fallback estructurado con LLM...")
+            text_to_parse = requirements_text or description or title
+            llm = container.llm_provider.get_chat_model(temperature=0.0)
+
+            prompt = f"""Extrae del siguiente texto los requerimientos del puesto técnico.
 Devuelve el resultado estructurado.
 Requerimientos:
-{requirements_text}
+{text_to_parse}
 """
-        structured_llm = llm.with_structured_output(ParsedRequirementsResponse)
-        try:
-            parsed = await structured_llm.ainvoke(prompt)
-        except Exception as e:
-            logger.warning("Fallo en structured output para requerimientos: %s. Creando fallback.", str(e))
-            parsed = ParsedRequirementsResponse(
-                title="Puesto Técnico",
-                description=requirements_text[:200],
-                capabilities=[
+            structured_llm = llm.with_structured_output(ParsedRequirementsResponse)
+            try:
+                parsed = await structured_llm.ainvoke(prompt)
+                parsed_title = parsed.title
+                parsed_description = parsed.description
+                parsed_capabilities = parsed.capabilities
+            except Exception as e:
+                logger.warning("Fallo en structured output para requerimientos: %s. Creando fallback.", str(e))
+                parsed_title = title or "Puesto Técnico"
+                parsed_description = text_to_parse[:200]
+                parsed_capabilities = [
                     ParsedCapabilityItem(category="general", name=term.strip(), type="Indispensable")
-                    for term in requirements_text.split(",") if term.strip()
+                    for term in text_to_parse.split(",") if term.strip()
                 ]
-            )
+            raw_content = text_to_parse
 
         job_post = JobPost(
-            title=parsed.title,
-            description=parsed.description,
-            requiredCapabilities=[c.model_dump() for c in parsed.capabilities],
-            rawText=requirements_text,
+            title=parsed_title,
+            description=parsed_description,
+            requiredCapabilities=[c.model_dump() for c in parsed_capabilities],
+            rawText=raw_content,
         )
 
         # Actualizar en el contexto compartido
         context["job_post"] = job_post
 
-        summary_lines = [f"- **{c.name}** ({c.type}, nivel {c.level}) [Categoría: {c.category}]" for c in parsed.capabilities]
+        summary_lines = [f"- **{c.name}** ({c.type}, nivel {c.level}) [Categoría: {c.category}]" for c in parsed_capabilities]
         return (
-            f"✅ Requerimientos registrados para **{parsed.title}**:\n"
+            f"✅ Requerimientos registrados para **{parsed_title}**:\n"
             + "\n".join(summary_lines)
             + "\n\nAhora puedes adjuntar o enviar el CV del candidato para evaluarlo."
         )
