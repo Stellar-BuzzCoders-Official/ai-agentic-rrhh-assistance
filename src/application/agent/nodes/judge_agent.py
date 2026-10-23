@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.application.agent.state import RRHHState
@@ -9,37 +10,18 @@ from src.domain.services.scoring import calculate_evaluation_summary
 logger = logging.getLogger(__name__)
 
 
-async def judge_agent_node(state: RRHHState) -> dict:
-    """
-    Sub-agente auditor independiente de Grounding:
-    Verifica que las capacidades y afirmaciones del informe técnico estén
-    100% fundamentadas en el texto del CV del candidato.
-    """
-    report: TechnicalReport | None = state.get("technical_report")
-    if not report:
-        return {}
-
-    # Si ya fue auditado, no volver a auditar
-    if state.get("grounding_verdict"):
-        return {}
-
-    container = Container.get_instance()
-    cv_id = state.get("current_cv_id")
-    cv_text = ""
-
-    if cv_id:
-        file_meta = await container.file_repo.get_file_metadata(cv_id)
-        if file_meta:
-            cv_text = file_meta.extractedText
-
+async def _audit_report(
+    report: TechnicalReport,
+    cv_text: str,
+    judge_llm,
+) -> JudgeVerdict:
     if not cv_text:
-        logger.warning("No se encontró texto del CV para auditar con el juez.")
-        return {}
+        return JudgeVerdict(
+            approved=True,
+            reasoning="Auditoría no requerida: texto del CV no disponible.",
+            confidenceScore=0.8,
+        )
 
-    logger.info("Auditoría de Grounding iniciada por el sub-agente juez...")
-    judge_llm = container.judge_llm_provider.get_chat_model(temperature=0.0)
-
-    # Construir resumen de afirmaciones del informe a verificar
     claims_to_audit = []
     for cat in report.technicalCapabilities:
         for skill in cat.skills:
@@ -71,7 +53,10 @@ Dictamina si las afirmaciones y habilidades marcadas como 'Cumple' son veraces y
         ])
     except Exception as e:
         logger.error(
-            "Error en la ejecución del sub-agente juez: %s. Aprobando por defecto con advertencia.", str(e))
+            "Error en la ejecución del sub-agente juez para %s: %s. Aprobando por defecto con advertencia.",
+            report.personalInfo.name,
+            str(e),
+        )
         verdict = JudgeVerdict(
             approved=True,
             reasoning=f"Auditoría no completada por error técnico: {str(e)}",
@@ -79,12 +64,12 @@ Dictamina si las afirmaciones y habilidades marcadas como 'Cumple' son veraces y
         )
 
     if verdict.approved:
-        logger.info("✅ Veredicto del juez: APROBADO (Score: %.2f)", verdict.confidenceScore)
+        logger.info("✅ Veredicto del juez para %s: APROBADO (Score: %.2f)", report.personalInfo.name, verdict.confidenceScore)
         report.isGrounded = True
         report.requiresHumanReview = False
         report.judgeFeedback = "Aprobado por el sub-agente auditor de grounding."
     else:
-        logger.warning("❌ Veredicto del juez: RECHAZADO. Discrepancias detectadas: %s", verdict.issues)
+        logger.warning("❌ Veredicto del juez para %s: RECHAZADO. Discrepancias detectadas: %s", report.personalInfo.name, verdict.issues)
         report.isGrounded = False
         report.requiresHumanReview = True
         report.judgeFeedback = "Discrepancias detectadas por el auditor de grounding: " + "; ".join(verdict.issues)
@@ -106,7 +91,58 @@ Dictamina si las afirmaciones y habilidades marcadas como 'Cumple' son veraces y
                 report.resumen["cumpleDeseable"] = report.evaluationSummary.optionalSkillsMet
                 report.resumen["recomendation"] = report.evaluationSummary.recommendation
 
+    return verdict
+
+
+async def judge_agent_node(state: RRHHState) -> dict:
+    """
+    Sub-agente auditor independiente de Grounding:
+    Verifica que las capacidades y afirmaciones de cada informe técnico estén
+    100% fundamentadas en el texto del CV del candidato correspondiente.
+    """
+    reports = state.get("technical_reports") or ([state.get("technical_report")] if state.get("technical_report") else [])
+    if not reports:
+        return {}
+
+    # Si ya fue auditado el veredicto general y ningún reporte está pendiente
+    if state.get("grounding_verdict") and all(r.judgeFeedback for r in reports):
+        return {}
+
+    container = Container.get_instance()
+    judge_llm = container.judge_llm_provider.get_chat_model(temperature=0.0)
+
+    candidate_cv_texts = state.get("candidate_cv_texts") or {}
+    fallback_cv_text = ""
+    cv_id = state.get("current_cv_id")
+    if cv_id:
+        file_meta = await container.file_repo.get_file_metadata(cv_id)
+        if file_meta:
+            fallback_cv_text = file_meta.extractedText
+
+    logger.info("Auditoría de Grounding iniciada por el sub-agente juez para %d reporte(s)...", len(reports))
+
+    tasks = []
+    for report in reports:
+        if report.judgeFeedback and report.isGrounded is not None:
+            continue
+        cv_text = candidate_cv_texts.get(report.personalInfo.name) or fallback_cv_text
+        tasks.append(_audit_report(report, cv_text, judge_llm))
+
+    latest_verdict = None
+    if tasks:
+        verdicts = await asyncio.gather(*tasks)
+        latest_verdict = verdicts[-1]
+    elif state.get("grounding_verdict"):
+        latest_verdict = state.get("grounding_verdict")
+    else:
+        latest_verdict = JudgeVerdict(
+            approved=all(r.isGrounded for r in reports),
+            reasoning="Auditoría completada para todos los candidatos.",
+            confidenceScore=1.0,
+        )
+
     return {
-        "grounding_verdict": verdict,
-        "technical_report": report,
+        "grounding_verdict": latest_verdict,
+        "technical_reports": reports,
+        "technical_report": reports[-1] if reports else None,
     }

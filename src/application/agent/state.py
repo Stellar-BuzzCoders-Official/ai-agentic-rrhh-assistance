@@ -17,7 +17,9 @@ class RRHHState(TypedDict):
     process_phase: str  # 'request_requirements' | 'upload_cv_and_match'
     job_post: Optional[JobPost]
     current_cv_id: Optional[str]
+    candidate_cv_texts: Optional[Dict[str, str]]
     technical_report: Optional[TechnicalReport]
+    technical_reports: Optional[List[TechnicalReport]]
     relevant_candidates: List[CandidateMatch]
     grounding_verdict: Optional[JudgeVerdict]
     grounding_retries: int

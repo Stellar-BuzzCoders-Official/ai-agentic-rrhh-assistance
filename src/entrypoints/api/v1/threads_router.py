@@ -80,6 +80,14 @@ async def get_thread_state(
     report_val = state_tuple.values.get("technical_report")
     report_data = report_val.model_dump(by_alias=True) if hasattr(report_val, "model_dump") else report_val
 
+    reports_val = state_tuple.values.get("technical_reports") or []
+    reports_data = [
+        r.model_dump(by_alias=True) if hasattr(r, "model_dump") else r
+        for r in reports_val
+    ]
+    if not reports_data and report_data:
+        reports_data = [report_data]
+
     job_val = state_tuple.values.get("job_post")
     job_data = job_val.model_dump(by_alias=True) if hasattr(job_val, "model_dump") else job_val
 
@@ -87,6 +95,8 @@ async def get_thread_state(
         "thread": thread_meta.model_dump(),
         "messages": formatted_messages,
         "technical_report": report_data,
+        "technical_reports": reports_data,
+        "technicalReports": reports_data,
         "job_post": job_data,
     }
 

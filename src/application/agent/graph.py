@@ -129,6 +129,10 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         context["thread_id"] = thread_id
         if state.get("job_post"):
             context["job_post"] = state["job_post"]
+        if state.get("technical_reports") and "technical_reports" not in context:
+            context["technical_reports"] = list(state["technical_reports"])
+        elif state.get("technical_report") and "technical_reports" not in context:
+            context["technical_reports"] = [state["technical_report"]]
 
         messages = state.get("messages", [])
 
@@ -156,12 +160,16 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         # Sincronizar objetos actualizados por las tools al estado de LangGraph
         if "job_post" in context:
             result["job_post"] = context["job_post"]
+        if "technical_reports" in context:
+            result["technical_reports"] = list(context["technical_reports"])
         if "technical_report" in context:
             result["technical_report"] = context["technical_report"]
         if "relevant_candidates" in context:
             result["relevant_candidates"] = context["relevant_candidates"]
         if "current_cv_id" in context:
             result["current_cv_id"] = context["current_cv_id"]
+        if "candidate_cv_texts" in context:
+            result["candidate_cv_texts"] = dict(context["candidate_cv_texts"])
 
         return result
 
@@ -194,10 +202,10 @@ def build_screening_graph(container: Container | None = None, checkpointer=None)
         if last_msg and getattr(last_msg, "tool_calls", None):
             return "tools"
 
-        # Si hay un reporte técnico recién generado que aún no ha sido auditado por el juez
-        report = state.get("technical_report")
+        # Si hay reportes técnicos recién generados que aún no han sido auditados por el juez
+        reports = state.get("technical_reports") or ([state.get("technical_report")] if state.get("technical_report") else [])
         verdict = state.get("grounding_verdict")
-        if report and not verdict:
+        if reports and not verdict:
             return "judge_agent"
 
         return "finalize"

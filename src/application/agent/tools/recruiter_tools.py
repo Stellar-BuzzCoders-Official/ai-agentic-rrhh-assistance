@@ -265,6 +265,16 @@ Texto del CV:
         )
 
         context["technical_report"] = report
+        # Acumular todos los reportes de la sesión evitando duplicados por nombre
+        reports_list = context.setdefault("technical_reports", [])
+        existing_idx = next((i for i, r in enumerate(reports_list) if r.personalInfo.name == personal_info.name), None)
+        if existing_idx is not None:
+            reports_list[existing_idx] = report
+        else:
+            reports_list.append(report)
+
+        context.setdefault("candidate_cv_texts", {})[personal_info.name] = cv_text
+        context.setdefault("candidate_cv_ids", {})[personal_info.name] = file_id
         context["relevant_candidates"] = relevant_pool_matches
         context["current_cv_id"] = file_id
         context["current_cv_text"] = cv_text

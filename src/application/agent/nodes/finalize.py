@@ -60,25 +60,33 @@ async def finalize_node(state: RRHHState) -> dict:
         else:
             name_history = "Nueva Selección"
 
-    # Preparar el objeto technical_report para serialización JSON
-    report_dict = None
-    if report:
-        report_dict = report.model_dump(by_alias=True)
-        # Compatibilidad con v0 legacy
-        if not report_dict.get("resumen") and report.evaluationSummary:
-            report_dict["resumen"] = {
-                "cumpleIndispensable": report.evaluationSummary.requiredSkillsMet,
-                "cumpleDeseable": report.evaluationSummary.optionalSkillsMet,
-                "recomendation": report.evaluationSummary.recommendation,
+    # Preparar objetos de reportes técnicos para serialización JSON
+    reports = state.get("technical_reports") or []
+    if not reports and report:
+        reports = [report]
+
+    reports_dicts = []
+    for r in reports:
+        r_dict = r.model_dump(by_alias=True)
+        if not r_dict.get("resumen") and r.evaluationSummary:
+            r_dict["resumen"] = {
+                "cumpleIndispensable": r.evaluationSummary.requiredSkillsMet,
+                "cumpleDeseable": r.evaluationSummary.optionalSkillsMet,
+                "recomendation": r.evaluationSummary.recommendation,
             }
+        reports_dicts.append(r_dict)
+
+    latest_report_dict = reports_dicts[-1] if reports_dicts else None
 
     bot_message = {
         "id": str(uuid.uuid4()),
         "role": "assistant",
         "content": content_text,
         "validate": is_valid,
-        "technical_report": report_dict,
-        "technicalReport": report_dict,  # Frontend lee botMessage.technical_report o technicalReport
+        "technical_report": latest_report_dict,
+        "technicalReport": latest_report_dict,
+        "technical_reports": reports_dicts,
+        "technicalReports": reports_dicts,
     }
 
     response_data = {

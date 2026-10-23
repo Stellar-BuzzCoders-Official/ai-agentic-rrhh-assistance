@@ -94,9 +94,15 @@ async def chat_stream(
 
                     elif node_name == "finalize":
                         payload = node_update.get("client_response_payload", {})
-                        report = payload.get("data", {}).get("message", [{}])[0].get("technical_report")
-                        if report:
-                            yield f"event: report\ndata: {json.dumps(report)}\n\n"
+                        bot_msg = payload.get("data", {}).get("message", [{}])[0]
+                        reports = bot_msg.get("technical_reports")
+                        if reports and isinstance(reports, list):
+                            for rep in reports:
+                                yield f"event: report\ndata: {json.dumps(rep)}\n\n"
+                        else:
+                            report = bot_msg.get("technical_report")
+                            if report:
+                                yield f"event: report\ndata: {json.dumps(report)}\n\n"
                         yield f"event: done\ndata: {json.dumps(payload)}\n\n"
 
         except Exception as e:
